@@ -11,9 +11,12 @@ const {
   createPayrun,
   listPayruns,
   getPayrunById,
+  updatePayrun,
   computePayrun,
   validatePayrun,
   payPayrun,
+  getPayrunEmployees,
+  getPayrunEmployeeById,
   getPayslipsForPayrun,
   getPayslipById,
   getEmployeePayslips,
@@ -42,6 +45,15 @@ router.get(
   validateRequest({ params: z.object({ id: z.coerce.number().int().positive() }) }),
   getPayrunById
 );
+router.patch(
+  "/payruns/:id",
+  requirePermission("PAYRUNS", "UPDATE"),
+  validateRequest({
+    params: z.object({ id: z.coerce.number().int().positive() }),
+    body: updatePayrunSchema,
+  }),
+  updatePayrun
+);
 router.post(
   "/payruns/:id/compute",
   requirePermission("PAYRUNS", "PROCESS"),
@@ -59,6 +71,23 @@ router.post(
   requirePermission("PAYRUNS", "PAY"),
   validateRequest({ params: z.object({ id: z.coerce.number().int().positive() }) }),
   payPayrun
+);
+router.get(
+  "/payruns/:id/employees",
+  requirePermission("PAYRUNS", "READ"),
+  validateRequest({ params: z.object({ id: z.coerce.number().int().positive() }) }),
+  getPayrunEmployees
+);
+router.get(
+  "/payruns/:id/employees/:employeeId",
+  requirePermission("PAYRUNS", "READ"),
+  validateRequest({
+    params: z.object({
+      id: z.coerce.number().int().positive(),
+      employeeId: z.coerce.number().int().positive(),
+    }),
+  }),
+  getPayrunEmployeeById
 );
 
 // --- PAYSLIP ENDPOINTS ---

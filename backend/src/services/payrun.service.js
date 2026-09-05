@@ -171,6 +171,40 @@ async function computePayrunService({ actor, payrunId }) {
         const empNameSnapshot = `${emp.first_name} ${emp.last_name}`;
         const totalDeductions = salaryResult.summary.total_deductions + salaryResult.summary.total_tax + salaryResult.summary.total_contributions;
 
+        const snapshotData = {
+          company: {
+            company_id: companyId,
+          },
+          employee: {
+            employee_id: emp.employee_id,
+            code: emp.employee_code,
+            name: empNameSnapshot,
+            email: emp.email || null,
+            department: contract.department_name || "General",
+            position: contract.position_name || "Employee",
+          },
+          contract: {
+            contract_id: contract.contract_id,
+            wage: contract.wage,
+            wage_type: contract.wage_type,
+          },
+          structure: {
+            salary_structure_id: payrun.salary_structure_id,
+            name: salaryResult.salary_structure.name,
+          },
+          period: {
+            period_start: payrun.period_start,
+            period_end: payrun.period_end,
+            payrun_name: payrun.name,
+          },
+          summary: {
+            worked_days: proration.payableDays,
+            gross_pay: salaryResult.gross,
+            total_deductions: totalDeductions,
+            net_pay: salaryResult.net,
+          },
+        };
+
         // Create Payslip Header Snapshot
         const payslip = await createPayslip(client, {
           company_id: companyId,
@@ -188,6 +222,7 @@ async function computePayrunService({ actor, payrunId }) {
           total_deductions: totalDeductions,
           net_pay: salaryResult.net,
           status: "COMPUTED",
+          snapshot_data: snapshotData,
           created_by: actor.user_id,
         });
 
@@ -361,14 +396,131 @@ async function getEmployeePayslipsService(companyId, employeeId) {
   return getPayslipsForEmployee(null, companyId, employeeId);
 }
 
+async function updatePayrunService(companyId, payrunId, payload, actorUserId) {
+  const payrun = await findPayrunById(null, companyId, payrunId);
+  if (!payrun) {
+    throw new AppError(404, "Payrun not found", "PAYRUN_NOT_FOUND");
+  }
+
+  if (["VALIDATED", "PAID"].includes(payrun.status)) {
+    throw new AppError(400, `Cannot update payrun in '${payrun.status}' status`, "PAYRUN_LOCKED");
+  }
+
+  if (payload.period_start || payload.period_end || payload.salary_structure_id) {
+    const structureId = payload.salary_structure_id || payrun.salary_structure_id;
+    const start = payload.period_start || payrun.period_start;
+    const end = payload.period_end || payrun.period_end;
+
+    const hasOverlap = await findOverlappingPayruns(
+      null,
+      companyId,
+      structureId,
+      start,
+      end,
+      payrunId
+    );
+    if (hasOverlap) {
+      throw new AppError(409, "A payrun for this salary structure and period already exists", "DUPLICATE_PAYRUN_PERIOD");
+    }
+  }
+
+  await updatePayrunDetails(null, companyId, payrunId, payload);
+  await createAuditLog({
+    companyId,
+    userId: actorUserId,
+    module: "PAYROLL",
+    action: "PAYRUN_UPDATED",
+    recordId: payrunId,
+    details: payload,
+  });
+
+  return findPayrunById(null, companyId, payrunId);
+}
+
+async function getPayrunEmployeesService(companyId, payrunId) {
+  const payrun = await findPayrunById(null, companyId, payrunId);
+  if (!payrun) {
+    throw new AppError(404, "Payrun not found", "PAYRUN_NOT_FOUND");
+  }
+
+  const result = await query(
+    `
+      SELECT
+        pe.*,
+        e.employee_code,
+        e.first_name,
+        e.last_name,
+        e.email,
+        p.payslip_id,
+        p.gross_pay,
+        p.total_deductions,
+        p.net_pay,
+        p.status AS payslip_status
+      FROM payrun_employees pe
+      JOIN employees e ON e.employee_id = pe.employee_id
+      LEFT JOIN payslips p ON p.payrun_id = pe.payrun_id AND p.employee_id = pe.employee_id
+      WHERE pe.payrun_id = $1
+      ORDER BY e.employee_code ASC
+    `,
+    [payrunId]
+  );
+  return result.rows;
+}
+
+async function getPayrunEmployeeByIdService(companyId, payrunId, employeeId) {
+  const payrun = await findPayrunById(null, companyId, payrunId);
+  if (!payrun) {
+    throw new AppError(404, "Payrun not found", "PAYRUN_NOT_FOUND");
+  }
+
+  const peResult = await query(
+    `
+      SELECT
+        pe.*,
+        e.employee_code,
+        e.first_name,
+        e.last_name,
+        e.email
+      FROM payrun_employees pe
+      JOIN employees e ON e.employee_id = pe.employee_id
+      WHERE pe.payrun_id = $1 AND pe.employee_id = $2
+      LIMIT 1
+    `,
+    [payrunId, employeeId]
+  );
+
+  const peRecord = peResult.rows[0];
+  if (!peRecord) {
+    throw new AppError(404, "Employee record not found in this payrun", "PAYRUN_EMPLOYEE_NOT_FOUND");
+  }
+
+  const payslipResult = await query(
+    `SELECT payslip_id FROM payslips WHERE payrun_id = $1 AND employee_id = $2 LIMIT 1`,
+    [payrunId, employeeId]
+  );
+
+  let payslipDetails = null;
+  if (payslipResult.rows[0]) {
+    payslipDetails = await getPayslipById(null, companyId, payslipResult.rows[0].payslip_id);
+  }
+
+  return {
+    ...peRecord,
+    payslip: payslipDetails,
+  };
+}
+
 module.exports = {
   createPayrunService,
   listPayrunsService,
   getPayrunByIdService,
+  updatePayrunService,
   computePayrunService,
   validatePayrunService,
   payPayrunService,
   getPayslipsForPayrunService,
   getPayslipByIdService,
   getEmployeePayslipsService,
+  getPayrunEmployeesService,
+  getPayrunEmployeeByIdService,
 };

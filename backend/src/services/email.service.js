@@ -20,7 +20,7 @@ function getTransporter() {
   return transporter;
 }
 
-async function sendEmail({ to, subject, html, text }) {
+async function sendEmail({ to, subject, html, text, attachments }) {
   const activeTransporter = getTransporter();
 
   if (!activeTransporter) {
@@ -37,6 +37,7 @@ async function sendEmail({ to, subject, html, text }) {
       subject,
       text,
       html,
+      attachments,
     });
     console.log(`[EmailService] Email sent to ${to}. MessageId: ${info.messageId}`);
     return true;

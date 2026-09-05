@@ -2,12 +2,15 @@ const {
   createPayrunService,
   listPayrunsService,
   getPayrunByIdService,
+  updatePayrunService,
   computePayrunService,
   validatePayrunService,
   payPayrunService,
   getPayslipsForPayrunService,
   getPayslipByIdService,
   getEmployeePayslipsService,
+  getPayrunEmployeesService,
+  getPayrunEmployeeByIdService,
 } = require("../services/payrun.service");
 const { success } = require("../utils/response");
 const { AppError } = require("../utils/http");
@@ -33,6 +36,11 @@ async function getPayrunById(req, res) {
   return success(res, result, "Payrun fetched successfully");
 }
 
+async function updatePayrun(req, res) {
+  const result = await updatePayrunService(req.auth.company_id, Number(req.params.id), req.body, req.auth.user_id);
+  return success(res, result, "Payrun updated successfully");
+}
+
 async function computePayrun(req, res) {
   const result = await computePayrunService({
     actor: req.auth,
@@ -55,6 +63,16 @@ async function payPayrun(req, res) {
     payrunId: Number(req.params.id),
   });
   return success(res, result, "Payrun marked as paid successfully");
+}
+
+async function getPayrunEmployees(req, res) {
+  const result = await getPayrunEmployeesService(req.auth.company_id, Number(req.params.id));
+  return success(res, result, "Payrun employee records fetched successfully");
+}
+
+async function getPayrunEmployeeById(req, res) {
+  const result = await getPayrunEmployeeByIdService(req.auth.company_id, Number(req.params.id), Number(req.params.employeeId));
+  return success(res, result, "Payrun employee record fetched successfully");
 }
 
 async function getPayslipsForPayrun(req, res) {
@@ -84,9 +102,12 @@ module.exports = {
   createPayrun,
   listPayruns,
   getPayrunById,
+  updatePayrun,
   computePayrun,
   validatePayrun,
   payPayrun,
+  getPayrunEmployees,
+  getPayrunEmployeeById,
   getPayslipsForPayrun,
   getPayslipById,
   getEmployeePayslips,

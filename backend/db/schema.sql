@@ -717,6 +717,11 @@ CREATE TABLE IF NOT EXISTS payslips (
   total_deductions NUMERIC(12,2) NOT NULL DEFAULT 0,
   net_pay NUMERIC(12,2) NOT NULL DEFAULT 0,
   status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+  pdf_file_path TEXT,
+  email_status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+  email_sent_at TIMESTAMP,
+  email_error_message TEXT,
+  snapshot_data JSONB,
   generated_at TIMESTAMP,
   created_by INT,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -728,9 +733,16 @@ CREATE TABLE IF NOT EXISTS payslips (
   CONSTRAINT fk_payslips_salary_structure FOREIGN KEY (salary_structure_id) REFERENCES salary_structures(salary_structure_id) ON DELETE RESTRICT,
   CONSTRAINT fk_payslips_created_by FOREIGN KEY (created_by) REFERENCES users(user_id) ON DELETE SET NULL,
   CONSTRAINT uq_payslips_payrun_employee UNIQUE (payrun_id, employee_id),
-  CONSTRAINT chk_payslips_status CHECK (status IN ('DRAFT', 'COMPUTED', 'VALIDATED', 'PAID', 'CANCELLED')),
+  CONSTRAINT chk_payslips_status CHECK (status IN ('DRAFT', 'COMPUTED', 'VALIDATED', 'PAID', 'GENERATED', 'SENT', 'FAILED', 'CANCELLED')),
+  CONSTRAINT chk_payslips_email_status CHECK (email_status IN ('PENDING', 'SENT', 'FAILED')),
   CONSTRAINT chk_payslips_period CHECK (period_end >= period_start)
 );
+
+ALTER TABLE payslips ADD COLUMN IF NOT EXISTS pdf_file_path TEXT;
+ALTER TABLE payslips ADD COLUMN IF NOT EXISTS email_status VARCHAR(20) NOT NULL DEFAULT 'PENDING';
+ALTER TABLE payslips ADD COLUMN IF NOT EXISTS email_sent_at TIMESTAMP;
+ALTER TABLE payslips ADD COLUMN IF NOT EXISTS email_error_message TEXT;
+ALTER TABLE payslips ADD COLUMN IF NOT EXISTS snapshot_data JSONB;
 
 CREATE TABLE IF NOT EXISTS payslip_lines (
   payslip_line_id SERIAL PRIMARY KEY,
