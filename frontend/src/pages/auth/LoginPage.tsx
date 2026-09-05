@@ -1,64 +1,22 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Eye, EyeOff, Lock, Mail, AlertCircle } from 'lucide-react';
 
-function getRoleHomePath(roleName?: string | null): string {
+function getRoleHomePath(roleName?: string | null, employeeId?: number | null): string {
   if (!roleName) return '/employees';
   if (roleName === 'Admin') return '/users';
   if (roleName === 'HR Manager') return '/employees';
   if (roleName === 'Payroll Manager' || roleName === 'Payroll User') return '/payroll/payruns';
-  if (roleName === 'Employee') return '/time-off';
+  if (roleName === 'Employee') return employeeId ? `/employees/${employeeId}` : '/time-off';
   return '/employees';
-}
-
-function getSafeDestination(fromPath: string | undefined, roleName?: string | null): string {
-  const home = getRoleHomePath(roleName);
-  if (!fromPath || fromPath === '/forbidden' || fromPath === '/login' || fromPath === '/') {
-    return home;
-  }
-  if (roleName === 'Employee') {
-    if (
-      fromPath.startsWith('/employees') ||
-      fromPath.startsWith('/users') ||
-      fromPath.startsWith('/roles') ||
-      fromPath.startsWith('/permissions') ||
-      fromPath.startsWith('/departments') ||
-      fromPath.startsWith('/positions') ||
-      fromPath.startsWith('/contracts') ||
-      fromPath.startsWith('/working-schedules') ||
-      fromPath.startsWith('/payroll')
-    ) {
-      return home;
-    }
-  }
-  if (
-    roleName !== 'Admin' &&
-    (fromPath.startsWith('/users') || fromPath.startsWith('/roles') || fromPath.startsWith('/permissions'))
-  ) {
-    return home;
-  }
-  if (
-    roleName === 'HR Manager' &&
-    (fromPath.startsWith('/payroll') || fromPath.startsWith('/salary-structures') || fromPath.startsWith('/salary-rules'))
-  ) {
-    return home;
-  }
-  if (
-    (roleName === 'Payroll Manager' || roleName === 'Payroll User') &&
-    (fromPath.startsWith('/attendance-policies') || fromPath.startsWith('/users') || fromPath.startsWith('/roles') || fromPath.startsWith('/permissions'))
-  ) {
-    return home;
-  }
-  return fromPath;
 }
 
 export const LoginPage: React.FC = () => {
   const { login, isAuthenticated, isLoading: authLoading, user } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -67,10 +25,9 @@ export const LoginPage: React.FC = () => {
   const [errors, setErrors] = useState<{ identifier?: string; password?: string; general?: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // If already authenticated, redirect to destination
+  // If already authenticated, redirect to role home
   if (isAuthenticated && !authLoading) {
-    const fromPath = (location.state as { from?: { pathname?: string } })?.from?.pathname;
-    const destination = getSafeDestination(fromPath, user?.role_name);
+    const destination = getRoleHomePath(user?.role_name, user?.employee_id);
     return <Navigate to={destination} replace />;
   }
 
@@ -104,8 +61,10 @@ export const LoginPage: React.FC = () => {
         remember_me: rememberMe,
       });
 
-      const fromPath = (location.state as { from?: { pathname?: string } })?.from?.pathname;
-      const destination = getSafeDestination(fromPath, loggedInUser?.role_name || user?.role_name);
+      const destination = getRoleHomePath(
+        loggedInUser?.role_name || user?.role_name,
+        loggedInUser?.employee_id || user?.employee_id
+      );
       navigate(destination, { replace: true });
     } catch (err: unknown) {
       const errorObj = err as { message?: string; code?: string };

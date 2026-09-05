@@ -5,11 +5,11 @@ import { useAuth } from './hooks/useAuth';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 
 function RoleHomeRedirect() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   if (role === 'Admin') return <Navigate to="/users" replace />;
   if (role === 'HR Manager') return <Navigate to="/employees" replace />;
   if (role === 'Payroll Manager' || role === 'Payroll User') return <Navigate to="/payroll/payruns" replace />;
-  if (role === 'Employee') return <Navigate to="/time-off" replace />;
+  if (role === 'Employee') return <Navigate to={user?.employee_id ? `/employees/${user.employee_id}` : "/time-off"} replace />;
   return <Navigate to="/employees" replace />;
 }
 

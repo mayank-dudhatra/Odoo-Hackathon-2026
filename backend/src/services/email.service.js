@@ -42,8 +42,12 @@ async function sendEmail({ to, subject, html, text, attachments }) {
   }
 
   try {
+    const fromAddress = env.smtp.from && env.smtp.from.includes("<")
+      ? env.smtp.from
+      : `"PeoplePay360" <${env.smtp.user || env.smtp.from || "no-reply@peoplepay360.com"}>`;
+
     const info = await activeTransporter.sendMail({
-      from: env.smtp.from,
+      from: fromAddress,
       to,
       subject,
       text,
@@ -65,7 +69,7 @@ async function sendPasswordResetEmail({ to, resetUrl, userName }) {
   const text = `Hello ${displayName},\n\nYou requested a password reset for your PeoplePay360 account.\n\nPlease use the following link to reset your password:\n${resetUrl}\n\nThis link will expire in ${env.passwordResetTtlMinutes} minutes.\n\nIf you did not request this, please ignore this email or contact support.\n\nRegards,\nPeoplePay360 Team`;
 
   const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; borderRadius: 8px;">
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
       <h2 style="color: #4f46e5;">PeoplePay360 Password Reset</h2>
       <p>Hello <strong>${displayName}</strong>,</p>
       <p>We received a request to reset the password for your PeoplePay360 account.</p>
@@ -82,16 +86,16 @@ async function sendPasswordResetEmail({ to, resetUrl, userName }) {
   return sendEmail({ to, subject, html, text });
 }
 
-async function sendUserInvitationEmail({ to, userName, emailOrUsername, tempPassword, loginUrl, companyName }) {
+async function sendUserInvitationEmail({ to, userName, emailOrUsername, tempPassword, loginUrl, companyName, employeeCode, roleName }) {
   const subject = `Welcome to ${companyName || 'PeoplePay360'} - Your Account Credentials`;
-  const displayName = userName || "User";
+  const displayName = userName || "Employee";
   const targetLoginUrl = loginUrl || `${env.frontendBaseUrl.replace(/\/$/, "")}/login`;
 
   const text = `Hello ${displayName},
 
 Welcome to ${companyName || 'PeoplePay360'}! An account has been created for you.
 
-Login Email/ID: ${emailOrUsername}
+${employeeCode ? `Employee ID / Code: ${employeeCode}\n` : ''}${roleName ? `Role: ${roleName}\n` : ''}Login Email / Username: ${emailOrUsername}
 Temporary Password: ${tempPassword}
 Login URL: ${targetLoginUrl}
 
@@ -102,37 +106,44 @@ Regards,
 ${companyName || 'PeoplePay360'} Team`;
 
   const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
-      <div style="text-align: center; padding-bottom: 16px; border-bottom: 1px solid #f1f5f9;">
-        <h2 style="color: #4f46e5; margin: 0;">PeoplePay360</h2>
-        <p style="color: #64748b; font-size: 14px; margin-top: 4px;">Human Capital & Payroll Management</p>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+      <div style="text-align: center; padding-bottom: 20px; border-bottom: 1px solid #f1f5f9;">
+        <h1 style="color: #2563eb; margin: 0; font-size: 24px; font-weight: 700;">PeoplePay360</h1>
+        <p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">Human Resource & Payroll Management Portal</p>
       </div>
       
-      <div style="padding: 20px 0;">
-        <p style="font-size: 16px; color: #1e293b;">Hello <strong>${displayName}</strong>,</p>
-        <p style="font-size: 14px; color: #475569; line-height: 1.6;">
-          An account has been created for you at <strong>${companyName || 'PeoplePay360'}</strong>. You can now log in using the temporary credentials provided below.
+      <div style="padding: 24px 0;">
+        <p style="font-size: 16px; color: #0f172a; margin: 0 0 12px 0;">Hello <strong>${displayName}</strong>,</p>
+        <p style="font-size: 14px; color: #475569; line-height: 1.6; margin: 0 0 20px 0;">
+          Welcome to <strong>${companyName || 'PeoplePay360'}</strong>! Your employee portal account is ready. You can now log in using the temporary credentials below to access your profile, leave requests, attendance, and payslips.
         </p>
 
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;">
-          <p style="margin: 4px 0; font-size: 14px; color: #334155;"><strong>Login Email / ID:</strong> ${emailOrUsername}</p>
-          <p style="margin: 4px 0; font-size: 14px; color: #334155;"><strong>Temporary Password:</strong> <code style="background-color: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 15px; color: #0f172a;">${tempPassword}</code></p>
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; margin: 20px 0;">
+          <h3 style="margin: 0 0 12px 0; font-size: 13px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.05em;">Your Login Credentials</h3>
+          ${employeeCode ? `<p style="margin: 6px 0; font-size: 14px; color: #334155;"><strong>Employee Code:</strong> <span style="color: #0f172a; font-weight: 600;">${employeeCode}</span></p>` : ''}
+          ${roleName ? `<p style="margin: 6px 0; font-size: 14px; color: #334155;"><strong>Assigned Role:</strong> <span style="color: #0f172a;">${roleName}</span></p>` : ''}
+          <p style="margin: 6px 0; font-size: 14px; color: #334155;"><strong>Login Email / ID:</strong> <span style="color: #0f172a; font-weight: 600;">${emailOrUsername}</span></p>
+          <p style="margin: 8px 0 4px 0; font-size: 14px; color: #334155;"><strong>Temporary Password:</strong> <code style="background-color: #e2e8f0; padding: 3px 8px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 15px; color: #1e293b; font-weight: 700;">${tempPassword}</code></p>
         </div>
 
-        <p style="margin: 25px 0; text-align: center;">
-          <a href="${targetLoginUrl}" style="background-color: #4f46e5; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Log In to Your Account</a>
+        <div style="text-align: center; margin: 28px 0;">
+          <a href="${targetLoginUrl}" style="background-color: #2563eb; color: #ffffff; padding: 13px 32px; text-decoration: none; border-radius: 7px; font-weight: 600; font-size: 15px; display: inline-block; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);">Log In to Portal</a>
+        </div>
+
+        <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0 0 20px 0;">
+          Direct link: <a href="${targetLoginUrl}" style="color: #2563eb; text-decoration: underline;">${targetLoginUrl}</a>
         </p>
 
-        <div style="background-color: #fffbebf8; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 4px; margin-top: 20px;">
-          <p style="font-size: 13px; color: #92400e; margin: 0; font-weight: 600;">Security Requirement:</p>
-          <p style="font-size: 13px; color: #b45309; margin: 4px 0 0 0; line-height: 1.5;">
-            You will be prompted to change your temporary password immediately after your first login. Do not share this temporary password with anyone.
+        <div style="background-color: #fffbeb; border: 1px solid #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 6px; margin-top: 20px;">
+          <p style="font-size: 13px; color: #92400e; margin: 0; font-weight: 700;">Important Security Requirement:</p>
+          <p style="font-size: 12px; color: #b45309; margin: 4px 0 0 0; line-height: 1.5;">
+            You will be prompted to change your temporary password immediately upon your first login. Please keep your credentials secure and never share them with anyone.
           </p>
         </div>
       </div>
 
       <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 20px 0;" />
-      <p style="font-size: 12px; color: #94a3b8; text-align: center; margin: 0;">This is an automated notification from PeoplePay360.</p>
+      <p style="font-size: 12px; color: #94a3b8; text-align: center; margin: 0;">This is an automated notification from ${companyName || 'PeoplePay360'}. If you did not expect this email, please contact your HR department.</p>
     </div>
   `;
 

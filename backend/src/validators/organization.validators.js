@@ -46,6 +46,7 @@ const employeeSchema = z.object({
   schedule_id: z.coerce.number().int().positive().nullable().optional(),
   manager_id: z.coerce.number().int().positive().nullable().optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "TERMINATED"]).optional(),
+  create_user_account: z.boolean().optional(),
 });
 
 const employeeStatusSchema = z.object({

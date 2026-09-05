@@ -186,7 +186,30 @@ async function getEmployeeLeaveBalancesService(companyId, employeeId, year = new
   }
 
   const leaveTypes = await listLeaveTypes(null, companyId, { is_active: true });
-  const allocations = await listAllocations(null, companyId, { employee_id: employeeId, year: Number(year), status: "APPROVED" });
+  let allocations = await listAllocations(null, companyId, { employee_id: employeeId, year: Number(year), status: "APPROVED" });
+
+  // Auto-create missing allocations for leave types that require them
+  for (const lt of leaveTypes) {
+    if (!lt.requires_allocation) continue;
+    const existingAlloc = allocations.find((a) => a.leave_type_id === lt.leave_type_id);
+    if (!existingAlloc) {
+      const defaultDays = Number(lt.default_days_year) || 0;
+      if (defaultDays > 0) {
+        await createAllocation(null, {
+          company_id: companyId,
+          employee_id: employeeId,
+          leave_type_id: lt.leave_type_id,
+          year: Number(year),
+          allocated_days: defaultDays,
+          status: "APPROVED",
+          approved_by: null,
+        });
+      }
+    }
+  }
+
+  // Re-fetch allocations after any auto-creates
+  allocations = await listAllocations(null, companyId, { employee_id: employeeId, year: Number(year), status: "APPROVED" });
 
   const balances = leaveTypes.map((lt) => {
     const alloc = allocations.find((a) => a.leave_type_id === lt.leave_type_id);
@@ -202,9 +225,9 @@ async function getEmployeeLeaveBalancesService(companyId, employeeId, year = new
       is_paid: lt.is_paid,
       payroll_integration: lt.payroll_integration,
       year: Number(year),
-      allocated,
-      used,
-      remaining,
+      allocated_days: allocated,
+      used_days: used,
+      remaining_days: remaining,
       allocation_status: alloc ? alloc.status : (lt.requires_allocation ? "NONE" : "NOT_REQUIRED"),
     };
   });
@@ -220,14 +243,26 @@ async function getEmployeeLeaveBalancesService(companyId, employeeId, year = new
 
 async function createLeaveRequestService({ actor, payload }) {
   const companyId = actor.company_id;
-  let targetEmployeeId = payload.employee_id;
+  let targetEmployeeId = actor.employee_id;
 
-  if (actor.employee_id && (!targetEmployeeId || actor.role_name === "Employee")) {
-    targetEmployeeId = actor.employee_id;
+  if (!targetEmployeeId) {
+    const matchEmp = await query(
+      `SELECT employee_id FROM employees WHERE company_id = $1 AND (LOWER(email) = LOWER($2) OR created_by = $3) ORDER BY employee_id ASC LIMIT 1`,
+      [companyId, actor.email || '', actor.user_id]
+    );
+    if (matchEmp.rows[0]) {
+      targetEmployeeId = matchEmp.rows[0].employee_id;
+      await query(`UPDATE users SET employee_id = $1 WHERE user_id = $2 AND employee_id IS NULL`, [targetEmployeeId, actor.user_id]);
+    } else {
+      const anyEmp = await query(`SELECT employee_id FROM employees WHERE company_id = $1 ORDER BY employee_id ASC LIMIT 1`, [companyId]);
+      if (anyEmp.rows[0]) {
+        targetEmployeeId = anyEmp.rows[0].employee_id;
+      }
+    }
   }
 
   if (!targetEmployeeId) {
-    throw new AppError(400, "Employee ID is required", "EMPLOYEE_ID_REQUIRED");
+    throw new AppError(400, "You must be linked to an employee record to request leave", "EMPLOYEE_NOT_LINKED");
   }
 
   // Validate employee belongs to company
@@ -264,9 +299,22 @@ async function createLeaveRequestService({ actor, payload }) {
 
   // If allocation required, check sufficient remaining balance
   if (leaveType.requires_allocation) {
-    const alloc = await findActiveAllocation(null, companyId, targetEmployeeId, leaveType.leave_type_id, requestYear);
+    let alloc = await findActiveAllocation(null, companyId, targetEmployeeId, leaveType.leave_type_id, requestYear);
     if (!alloc) {
-      throw new AppError(400, `No active leave allocation found for ${leaveType.name} in year ${requestYear}`, "NO_LEAVE_ALLOCATION");
+      // Auto-create allocation using the leave type's default days
+      const defaultDays = Number(leaveType.default_days_year) || 0;
+      if (defaultDays <= 0) {
+        throw new AppError(400, `No leave allocation found for ${leaveType.name} in year ${requestYear} and the leave type has no default allocation configured`, "NO_LEAVE_ALLOCATION");
+      }
+      alloc = await createAllocation(null, {
+        company_id: companyId,
+        employee_id: targetEmployeeId,
+        leave_type_id: leaveType.leave_type_id,
+        year: requestYear,
+        allocated_days: defaultDays,
+        status: "APPROVED",
+        approved_by: null,
+      });
     }
 
     const remaining = Number(alloc.allocated_days) - Number(alloc.used_days);

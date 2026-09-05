@@ -7,7 +7,9 @@ import type { User } from '../../types/users';
 import type { Role } from '../../types/rbac';
 import { usersApi } from '../../api/users.api';
 import { rolesApi } from '../../api/roles.api';
-import { AlertCircle } from 'lucide-react';
+import { employeesApi } from '../../api/employees.api';
+import type { Employee } from '../../types/organization';
+import { AlertCircle, Mail } from 'lucide-react';
 
 interface UserFormModalProps {
   isOpen: boolean;
@@ -38,21 +40,29 @@ const UserFormContent: React.FC<{
     userToEdit?.employee_id ? String(userToEdit.employee_id) : ''
   );
   const [roles, setRoles] = useState<Role[]>(DEFAULT_ROLES);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [rolesLoading, setRolesLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   useEffect(() => {
     let active = true;
-    const fetchRoles = async () => {
+    const fetchData = async () => {
       try {
-        const list = await rolesApi.listRoles();
-        if (active && list.length > 0) {
-          setRoles(list);
-          setRoleName((prev) => (!userToEdit && !prev ? list[0].role_name : prev));
+        setRolesLoading(true);
+        const [rolesList, empRes] = await Promise.all([
+          rolesApi.listRoles().catch(() => []),
+          employeesApi.getEmployees({ limit: 150 }).catch(() => ({ rows: [] })),
+        ]);
+        if (active) {
+          if (rolesList.length > 0) {
+            setRoles(rolesList);
+            setRoleName((prev) => (!userToEdit && !prev ? rolesList[0].role_name : prev));
+          }
+          if (empRes && empRes.rows) {
+            setEmployees(empRes.rows);
+          }
         }
-      } catch {
-        // Fallback to DEFAULT_ROLES
       } finally {
         if (active) {
           setRolesLoading(false);
@@ -60,7 +70,7 @@ const UserFormContent: React.FC<{
       }
     };
 
-    fetchRoles();
+    fetchData();
     return () => {
       active = false;
     };
@@ -165,6 +175,37 @@ const UserFormContent: React.FC<{
           </div>
         )}
 
+        <Select
+          label="Link to Employee (Optional)"
+          value={employeeId}
+          onChange={(e) => {
+            const val = e.target.value;
+            setEmployeeId(val);
+            if (val && !isEditing) {
+              const selectedEmp = employees.find((emp) => String(emp.employee_id) === val);
+              if (selectedEmp) {
+                if (!email && selectedEmp.email) {
+                  setEmail(selectedEmp.email);
+                }
+                if (!username) {
+                  const cleanFirst = (selectedEmp.first_name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                  const cleanLast = (selectedEmp.last_name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                  setUsername(cleanLast ? `${cleanFirst}.${cleanLast}` : cleanFirst);
+                }
+              }
+            }
+          }}
+          options={[
+            { value: '', label: 'None (Unlinked User)' },
+            ...employees.map((emp) => ({
+              value: String(emp.employee_id),
+              label: `${emp.full_name || `${emp.first_name} ${emp.last_name}`} (${emp.employee_code})${emp.email ? ` - ${emp.email}` : ''}`,
+            })),
+          ]}
+          disabled={isSubmitting}
+          helperText="Select an employee to link profile data and automatically personalize email credentials"
+        />
+
         <Input
           label="Username"
           value={username}
@@ -197,15 +238,14 @@ const UserFormContent: React.FC<{
           required
         />
 
-        <Input
-          label="Employee ID Link (Optional)"
-          type="number"
-          value={employeeId}
-          onChange={(e) => setEmployeeId(e.target.value)}
-          placeholder="Enter numeric Employee ID"
-          helperText="Associate this user with an existing employee record"
-          disabled={isSubmitting}
-        />
+        {!isEditing && (
+          <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg flex items-start gap-2.5 text-xs text-[#1D4ED8]">
+            <Mail className="w-4 h-4 shrink-0 mt-0.5 text-[#2563EB]" />
+            <span>
+              <strong>Automated Welcome Email:</strong> Temporary login credentials and portal access instructions will be sent to this email address automatically upon creation.
+            </span>
+          </div>
+        )}
       </form>
     </Modal>
   );

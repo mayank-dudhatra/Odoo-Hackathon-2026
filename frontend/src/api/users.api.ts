@@ -41,32 +41,23 @@ export const usersApi = {
   },
 
   async createUser(payload: CreateUserPayload): Promise<User> {
-    try {
-      const response = await apiClient<{ data: { user: User } | User } | User>('/auth/invitations', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
+    const response = await apiClient<{ data: { user: User } | User } | User>('/auth/invitations', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
 
-      if ('data' in response && response.data) {
-        const d = response.data;
-        if ('user' in d && d.user) return d.user;
-        return d as User;
-      }
-      return response as User;
-    } catch {
-      // Fallback to /users
-      const response = await apiClient<User | { data: { user: User } } | { data: User }>('/users', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-
-      if ('data' in response && response.data) {
-        const d = response.data;
-        if ('user' in d && d.user) return d.user;
-        return d as User;
-      }
-      return response as User;
+    if ('data' in response && response.data) {
+      const d = response.data;
+      if ('user' in d && d.user) return d.user;
+      return d as User;
     }
+    return response as User;
+  },
+
+  async resendInvitation(id: number): Promise<{ message?: string }> {
+    return apiClient<{ message?: string }>(`/auth/invitations/${id}/resend`, {
+      method: 'POST',
+    });
   },
 
   async updateUser(id: number, payload: UpdateUserPayload): Promise<User> {

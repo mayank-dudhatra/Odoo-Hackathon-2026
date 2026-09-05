@@ -25,6 +25,9 @@ function buildPublicUser(row) {
     last_login_at: row.last_login_at,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    first_name: row.first_name || null,
+    last_name: row.last_name || null,
+    employee_code: row.employee_code || null,
   });
 }
 
@@ -150,10 +153,14 @@ async function login({ identifier, password, ipAddress, userAgent }) {
         u.last_login_at,
         u.created_at,
         u.updated_at,
-        c.is_active AS company_active
+        c.is_active AS company_active,
+        e.first_name,
+        e.last_name,
+        e.employee_code
       FROM users u
       JOIN roles r ON r.role_id = u.role_id
       JOIN companies c ON c.company_id = u.company_id
+      LEFT JOIN employees e ON e.employee_id = u.employee_id
       WHERE LOWER(u.username) = LOWER($1) OR LOWER(u.email) = LOWER($1)
       LIMIT 1
     `,
@@ -559,22 +566,30 @@ async function createInvitationForUser({ actor, payload }) {
     ]
   );
 
-  const newUser = result.rows[0];
-
-  const companyResult = await query(
-    `SELECT name FROM companies WHERE company_id = $1 LIMIT 1`,
-    [actor.company_id]
-  );
-  const companyName = companyResult.rows[0]?.name || "PeoplePay360";
+  let employeeName = null;
+  let employeeCode = null;
+  if (payload.employee_id) {
+    const empResult = await query(
+      `SELECT first_name, last_name, employee_code, email FROM employees WHERE employee_id = $1 AND company_id = $2 LIMIT 1`,
+      [payload.employee_id, actor.company_id]
+    );
+    if (empResult.rows[0]) {
+      const emp = empResult.rows[0];
+      employeeName = `${emp.first_name || ''} ${emp.last_name || ''}`.trim();
+      employeeCode = emp.employee_code;
+    }
+  }
 
   try {
     await sendUserInvitationEmail({
       to: newUser.email,
-      userName: newUser.username,
+      userName: employeeName || newUser.username,
       emailOrUsername: newUser.email,
       tempPassword,
       loginUrl: `${env.frontendBaseUrl.replace(/\/$/, "")}/login`,
       companyName,
+      employeeCode,
+      roleName: role.role_name,
     });
   } catch (err) {
     console.error("[AuthService] Failed to send user invitation email:", err.message);
@@ -617,9 +632,11 @@ async function createInvitationForUser({ actor, payload }) {
 async function resendInvitation({ actor, targetUserId }) {
   const targetResult = await query(
     `
-      SELECT u.user_id, u.company_id, u.username, u.email, u.status, r.role_name
+      SELECT u.user_id, u.company_id, u.employee_id, u.username, u.email, u.status, r.role_name,
+             e.first_name, e.last_name, e.employee_code
       FROM users u
       JOIN roles r ON r.role_id = u.role_id
+      LEFT JOIN employees e ON e.employee_id = u.employee_id
       WHERE u.user_id = $1 AND u.company_id = $2
       LIMIT 1
     `,
@@ -631,24 +648,49 @@ async function resendInvitation({ actor, targetUserId }) {
     throw new AppError(404, "User not found", "USER_NOT_FOUND");
   }
 
-  if (targetUser.status !== "INVITED") {
-    throw new AppError(400, "User is not in invited state", "USER_NOT_INVITED");
+  if (targetUser.status === "DISABLED") {
+    throw new AppError(400, "Cannot resend credentials for disabled user", "USER_DISABLED");
   }
 
-  const invitationToken = generateRandomToken(64);
-  const invitationTokenHash = hashToken(invitationToken);
+  const tempPassword = generateTemporaryPassword(12);
+  const passwordHash = await hashPassword(tempPassword);
 
-  const updateResult = await query(
+  await query(
     `
       UPDATE users
-      SET invitation_token_hash = $1,
-          invitation_expires_at = NOW() + ($2::int * INTERVAL '1 hour'),
+      SET password_hash = $1,
+          must_change_password = TRUE,
           updated_at = NOW()
-      WHERE user_id = $3
-      RETURNING invitation_expires_at
+      WHERE user_id = $2 AND company_id = $3
     `,
-    [invitationTokenHash, env.invitationTtlHours, targetUserId]
+    [passwordHash, targetUserId, actor.company_id]
   );
+
+  const companyResult = await query(
+    `SELECT name FROM companies WHERE company_id = $1 LIMIT 1`,
+    [actor.company_id]
+  );
+  const companyName = companyResult.rows[0]?.name || "PeoplePay360";
+
+  const employeeName = targetUser.first_name
+    ? `${targetUser.first_name} ${targetUser.last_name || ''}`.trim()
+    : targetUser.username;
+
+  try {
+    await sendUserInvitationEmail({
+      to: targetUser.email,
+      userName: employeeName,
+      emailOrUsername: targetUser.email,
+      tempPassword,
+      loginUrl: `${env.frontendBaseUrl.replace(/\/$/, "")}/login`,
+      companyName,
+      employeeCode: targetUser.employee_code,
+      roleName: targetUser.role_name,
+    });
+  } catch (err) {
+    console.error("[AuthService] Failed to resend invitation email:", err.message);
+    throw new AppError(500, `Failed to send credentials email: ${err.message}`, "EMAIL_SEND_FAILED");
+  }
 
   await createAuditLog({
     companyId: actor.company_id,
@@ -656,17 +698,15 @@ async function resendInvitation({ actor, targetUserId }) {
     module: "AUTH",
     action: "INVITATION_RESENT",
     recordId: targetUserId,
+    details: {
+      user_email: targetUser.email,
+      role_name: targetUser.role_name,
+    },
   });
 
   return {
     user_id: targetUserId,
-    status: "INVITED",
-    invitation_expires_at: updateResult.rows[0].invitation_expires_at,
-    activation_token: env.nodeEnv === "production" ? undefined : invitationToken,
-    activation_url:
-      env.nodeEnv === "production"
-        ? undefined
-        : `${env.frontendBaseUrl.replace(/\/$/, "")}/activate?token=${invitationToken}`,
+    message: `Credentials sent successfully to ${targetUser.email}`,
   };
 }
 
@@ -686,9 +726,13 @@ async function getCurrentUserProfile(userId, companyId) {
         u.email_verified_at,
         u.last_login_at,
         u.created_at,
-        u.updated_at
+        u.updated_at,
+        e.first_name,
+        e.last_name,
+        e.employee_code
       FROM users u
       JOIN roles r ON r.role_id = u.role_id
+      LEFT JOIN employees e ON e.employee_id = u.employee_id
       WHERE u.user_id = $1 AND u.company_id = $2
       LIMIT 1
     `,

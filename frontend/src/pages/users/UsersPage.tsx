@@ -19,6 +19,7 @@ import {
   Eye,
   Edit2,
   Power,
+  Mail,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -56,6 +57,22 @@ export const UsersPage: React.FC = () => {
 
   // Notification Banner
   const [notification, setNotification] = useState<string | null>(null);
+  const [resendingId, setResendingId] = useState<number | null>(null);
+
+  const handleResendCredentials = async (u: User) => {
+    try {
+      setResendingId(u.user_id);
+      const res = await usersApi.resendInvitation(u.user_id);
+      setNotification(res?.message || `Credentials sent successfully to ${u.email}`);
+      setTimeout(() => setNotification(null), 5000);
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
+      setError(errorObj?.message || 'Failed to send credentials email.');
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setResendingId(null);
+    }
+  };
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -382,6 +399,19 @@ export const UsersPage: React.FC = () => {
                               title="Edit user role & assignment"
                             >
                               <Edit2 className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          {/* Send / Resend Credentials via Email */}
+                          {canUpdate && (
+                            <button
+                              type="button"
+                              onClick={() => handleResendCredentials(u)}
+                              disabled={resendingId === u.user_id || u.status === 'DISABLED'}
+                              className="p-1.5 rounded-md text-[#64748B] hover:text-[#2563EB] hover:bg-[#EFF6FF] transition-colors cursor-pointer disabled:opacity-40"
+                              title="Send / Resend login credentials email"
+                            >
+                              <Mail className={`w-4 h-4 ${resendingId === u.user_id ? 'animate-pulse text-[#2563EB]' : ''}`} />
                             </button>
                           )}
 

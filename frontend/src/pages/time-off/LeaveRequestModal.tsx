@@ -2,10 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from '../../components/common/Modal';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
+import { Badge } from '../../components/common/Badge';
 import { leaveApi } from '../../api/leave.api';
-import { employeesApi } from '../../api/employees.api';
 import type { LeaveType, LeaveBalance, CreateLeaveRequestPayload } from '../../types/leave';
-import type { Employee } from '../../types/organization';
 import { useAuth } from '../../hooks/useAuth';
 
 interface LeaveRequestModalProps {
@@ -19,13 +18,9 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const { user, checkPermission, role } = useAuth();
-  const isAdmin = role === 'Admin';
-  const canAdmin = isAdmin || checkPermission('LEAVE_REQUESTS', 'CREATE');
-  const isEmployeeRole = role === 'Employee' || user?.role_name === 'Employee';
+  const { user, role } = useAuth();
 
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
 
   const [employeeId, setEmployeeId] = useState<string>('');
@@ -43,18 +38,15 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
     if (isOpen) {
       Promise.all([
         leaveApi.listLeaveTypes().catch(() => []),
-        !isEmployeeRole ? employeesApi.getEmployees({ limit: 150, status: 'ACTIVE' }).catch(() => ({ rows: [] })) : Promise.resolve({ rows: [] }),
         leaveApi.getOwnLeaveBalances().catch(() => []),
-      ]).then(([typesRes, empsRes, balancesRes]) => {
+      ]).then(([typesRes, balancesRes]) => {
         if (!active) return;
         setLeaveTypes(typesRes || []);
-        const empList = (empsRes as any)?.rows || (Array.isArray(empsRes) ? empsRes : []);
-        setEmployees(empList);
         setBalances(balancesRes || []);
       });
     }
     return () => { active = false; };
-  }, [isOpen, isEmployeeRole]);
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -152,26 +144,18 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
           </div>
         )}
 
-        {/* Optional Employee Selector for Admin/HR creating on behalf */}
-        {!isEmployeeRole && canAdmin && employees.length > 0 && (
+        {/* Applicant Info (Myself) */}
+        <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg flex items-center justify-between">
           <div>
-            <label className="block text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-1">
-              On Behalf of Employee (Optional)
+            <label className="block text-2xs font-semibold text-[#64748B] uppercase tracking-wider">
+              Applicant (Applying For)
             </label>
-            <select
-              value={employeeId}
-              onChange={(e) => setEmployeeId(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-white border border-[#E2E8F0] rounded-md text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
-            >
-              <option value="">Myself ({user?.first_name} {user?.last_name})</option>
-              {employees.map((emp) => (
-                <option key={emp.employee_id} value={emp.employee_id}>
-                  {emp.first_name} {emp.last_name} ({emp.employee_code})
-                </option>
-              ))}
-            </select>
+            <div className="text-sm font-bold text-[#0F172A] mt-0.5">
+              {user?.first_name ? `${user.first_name} ${user.last_name}` : user?.username || 'Myself'}
+            </div>
           </div>
-        )}
+          <Badge variant="neutral">{user?.role_name || role || 'User'}</Badge>
+        </div>
 
         {/* Leave Type */}
         <div>

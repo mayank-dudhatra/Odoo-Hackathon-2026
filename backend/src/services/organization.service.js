@@ -38,6 +38,9 @@ const {
   listManagerChain,
 } = require("../repositories/organization.repository");
 const { createAuditLog } = require("./audit.service");
+const { hashPassword, generateTemporaryPassword } = require("../utils/password");
+const { sendUserInvitationEmail } = require("./email.service");
+const { env } = require("../config/env");
 
 async function ensureEmployeeBelongsToCompany(companyId, employeeId, label) {
   if (!employeeId) {
@@ -457,6 +460,119 @@ async function createEmployeeRecord(auth, payload) {
   });
 
   const employee = await getEmployeeById(auth.company_id, employeeId);
+
+  // Automatically create user account & email credentials if employee has an email
+  if (employee && employee.email && payload.create_user_account !== false) {
+    try {
+      const existingUser = await query(
+        `SELECT user_id FROM users WHERE company_id = $1 AND (LOWER(email) = LOWER($2) OR employee_id = $3) LIMIT 1`,
+        [auth.company_id, employee.email.trim(), employeeId]
+      );
+
+      if (!existingUser.rows[0]) {
+        const cleanFirst = (employee.first_name || "emp").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const cleanLast = (employee.last_name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        let baseUsername = cleanLast ? `${cleanFirst}.${cleanLast}` : cleanFirst;
+        if (baseUsername.length < 3) baseUsername = `${baseUsername}100`;
+
+        let chosenUsername = baseUsername;
+        const userCheck = await query(
+          `SELECT user_id FROM users WHERE company_id = $1 AND LOWER(username) = LOWER($2) LIMIT 1`,
+          [auth.company_id, chosenUsername]
+        );
+        if (userCheck.rows[0]) {
+          const codeSuffix = employee.employee_code ? employee.employee_code.toLowerCase().replace(/[^a-z0-9]/g, "") : String(employeeId);
+          chosenUsername = `${baseUsername}.${codeSuffix}`;
+        }
+
+        const tempPassword = generateTemporaryPassword(12);
+        const passwordHash = await hashPassword(tempPassword);
+
+        const roleResult = await query(
+          `SELECT role_id FROM roles WHERE role_name = 'Employee' LIMIT 1`
+        );
+        const employeeRoleId = roleResult.rows[0]?.role_id || 5;
+
+        const userInsert = await query(
+          `
+            INSERT INTO users (
+              company_id,
+              employee_id,
+              username,
+              email,
+              password_hash,
+              role_id,
+              status,
+              must_change_password,
+              email_verified_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE', TRUE, NOW())
+            RETURNING user_id, username, email
+          `,
+          [
+            auth.company_id,
+            employeeId,
+            chosenUsername,
+            employee.email.trim(),
+            passwordHash,
+            employeeRoleId,
+          ]
+        );
+
+        const newUser = userInsert.rows[0];
+
+        const companyResult = await query(
+          `SELECT name FROM companies WHERE company_id = $1 LIMIT 1`,
+          [auth.company_id]
+        );
+        const companyName = companyResult.rows[0]?.name || "PeoplePay360";
+
+        try {
+          await sendUserInvitationEmail({
+            to: employee.email.trim(),
+            userName: `${employee.first_name} ${employee.last_name || ''}`.trim(),
+            emailOrUsername: employee.email.trim(),
+            tempPassword,
+            loginUrl: `${env.frontendBaseUrl.replace(/\/$/, "")}/login`,
+            companyName,
+            employeeCode: employee.employee_code,
+            roleName: "Employee",
+          });
+          console.log(`[OrganizationService] Sent credentials email to new employee ${employee.email} (Username: ${chosenUsername})`);
+        } catch (emailErr) {
+          console.error(`[OrganizationService] Failed to send credentials email to ${employee.email}:`, emailErr.message);
+        }
+
+        await createAuditLog({
+          companyId: auth.company_id,
+          userId: auth.user_id,
+          module: "AUTH",
+          action: "USER_CREATED",
+          recordId: newUser.user_id,
+          details: {
+            employee_id: employeeId,
+            email: employee.email,
+            username: chosenUsername,
+            role_name: "Employee",
+          },
+        });
+
+        await createAuditLog({
+          companyId: auth.company_id,
+          userId: auth.user_id,
+          module: "AUTH",
+          action: "INVITATION_SENT",
+          recordId: newUser.user_id,
+          details: {
+            employee_id: employeeId,
+            email: employee.email,
+          },
+        });
+      }
+    } catch (err) {
+      console.error("[OrganizationService] Error auto-creating user account for employee:", err.message);
+    }
+  }
 
   await createAuditLog({
     companyId: auth.company_id,

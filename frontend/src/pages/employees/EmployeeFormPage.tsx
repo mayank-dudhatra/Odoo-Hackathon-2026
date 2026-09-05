@@ -8,12 +8,12 @@ import {
   AlertCircle,
   CheckCircle2,
   Building2,
-  Briefcase,
   Clock,
   FileText,
   Shield,
   Plus,
   UserCheck,
+  Mail,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -471,7 +471,6 @@ export const EmployeeFormPage: React.FC = () => {
         <div className="bg-white rounded-xl border border-[#E2E8F0] p-4 shadow-2xs">
           <div className="flex items-center justify-between overflow-x-auto gap-2 pb-1 scrollbar-none">
             {ONBOARDING_STEPS.map((s) => {
-              const Icon = s.icon;
               const isCurrent = currentStep === s.step;
               const isCompleted = currentStep > s.step;
 
@@ -648,6 +647,20 @@ export const EmployeeFormPage: React.FC = () => {
                   onChange={(e) => setAddress(e.target.value)}
                 />
               </div>
+
+              {!isEditing && (
+                <div className="md:col-span-2 p-3.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg flex items-start gap-3 text-xs text-[#1D4ED8]">
+                  <Mail className="w-4 h-4 shrink-0 mt-0.5 text-[#2563EB]" />
+                  <div>
+                    <span className="font-semibold text-[#1E40AF]">Employee Portal Account & Login Credentials:</span>
+                    <p className="mt-0.5 text-[#2563EB]">
+                      {email
+                        ? `A portal user account will be automatically created, and secure login credentials will be emailed to ${email}.`
+                        : 'Provide an email address above to automatically create a portal login account and send login credentials.'}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
