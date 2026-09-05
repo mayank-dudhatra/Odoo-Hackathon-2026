@@ -14,6 +14,10 @@ import {
   Trash2,
   Clock,
   FileText,
+  Shield,
+  Eye,
+  X,
+  CheckCircle2,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
@@ -22,9 +26,11 @@ import { ErrorAlert } from '../../components/common/States';
 import { employeesApi } from '../../api/employees.api';
 import { contractsApi } from '../../api/contracts.api';
 import { schedulesApi } from '../../api/schedules.api';
+import { attendanceApi } from '../../api/attendance.api';
 import type { Employee, EmployeeStatus } from '../../types/organization';
 import type { EffectiveContract } from '../../types/contracts';
 import type { WorkingSchedule } from '../../types/schedules';
+import type { AttendancePolicy } from '../../types/attendance';
 import { formatCurrency, formatDate } from '../../utils/format';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -37,8 +43,13 @@ export const EmployeeDetailPage: React.FC = () => {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [effectiveContract, setEffectiveContract] = useState<EffectiveContract | null>(null);
   const [effectiveSchedule, setEffectiveSchedule] = useState<WorkingSchedule | null>(null);
+  const [assignedPolicy, setAssignedPolicy] = useState<AttendancePolicy | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Modal view states
+  const [isContractModalOpen, setIsContractModalOpen] = useState(false);
+  const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
 
   // Status Change State
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
@@ -59,9 +70,22 @@ export const EmployeeDetailPage: React.FC = () => {
     try {
       const data = await employeesApi.getEmployee(id);
       setEmployee(data);
-      // Also fetch effective contract and schedule
-      contractsApi.getEffectiveContract(Number(id)).then(setEffectiveContract).catch(() => setEffectiveContract(null));
-      schedulesApi.getEffectiveSchedule(Number(id)).then(setEffectiveSchedule).catch(() => setEffectiveSchedule(null));
+
+      const [contractData, scheduleData, policiesData] = await Promise.all([
+        contractsApi.getEffectiveContract(Number(id)).catch(() => null),
+        schedulesApi.getEffectiveSchedule(Number(id)).catch(() => null),
+        attendanceApi.listPolicies().catch(() => []),
+      ]);
+
+      setEffectiveContract(contractData);
+      setEffectiveSchedule(scheduleData);
+
+      if (scheduleData?.attendance_policy_id && policiesData.length > 0) {
+        const found = policiesData.find((p) => p.policy_id === scheduleData.attendance_policy_id);
+        setAssignedPolicy(found || policiesData[0] || null);
+      } else if (policiesData.length > 0) {
+        setAssignedPolicy(policiesData[0]);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to load employee details';
       setError(msg);
@@ -71,27 +95,8 @@ export const EmployeeDetailPage: React.FC = () => {
   }, [id]);
 
   useEffect(() => {
-    if (!id) return;
-    let active = true;
-    (async () => {
-      try {
-        const data = await employeesApi.getEmployee(id);
-        if (active) {
-          setEmployee(data);
-          contractsApi.getEffectiveContract(Number(id)).then((c) => active && setEffectiveContract(c)).catch(() => {});
-          schedulesApi.getEffectiveSchedule(Number(id)).then((s: WorkingSchedule) => active && setEffectiveSchedule(s)).catch(() => {});
-        }
-      } catch (err: unknown) {
-        if (active) {
-          const msg = err instanceof Error ? err.message : 'Failed to load employee details';
-          setError(msg);
-        }
-      } finally {
-        if (active) setIsLoading(false);
-      }
-    })();
-    return () => { active = false; };
-  }, [id]);
+    fetchEmployee();
+  }, [fetchEmployee]);
 
   const handleStatusChangeConfirm = async () => {
     if (!employee || !targetStatus) return;
@@ -169,7 +174,7 @@ export const EmployeeDetailPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 max-w-5xl pb-12">
       {/* Top Navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <Button
@@ -371,121 +376,314 @@ export const EmployeeDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Effective Contract & Working Schedule Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Effective Contract, Working Schedule & Policy Section */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Effective Contract */}
-        <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
-            <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-[#2563EB]" />
-              <h2 className="text-base font-bold text-[#0F172A]">Effective Contract (Today)</h2>
+        <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-2xs space-y-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-[#2563EB]" />
+                <h2 className="text-base font-bold text-[#0F172A]">Effective Contract</h2>
+              </div>
+              {effectiveContract && (
+                <Badge variant="success">Active</Badge>
+              )}
             </div>
-            {effectiveContract && (
-              <Badge variant="success">Active</Badge>
+
+            {effectiveContract ? (
+              <div className="space-y-3 text-sm pt-2">
+                <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                  <span className="text-[#64748B]">Compensation:</span>
+                  <span className="font-bold text-[#0F172A]">
+                    {formatCurrency(effectiveContract.wage)}
+                    <span className="text-xs text-[#64748B] font-normal ml-1">
+                      / {effectiveContract.wage_type?.toLowerCase() || 'month'}
+                    </span>
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                  <span className="text-[#64748B]">Salary Structure:</span>
+                  <span className="font-medium text-[#0F172A]">{effectiveContract.salary_structure_name || 'Standard'}</span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                  <span className="text-[#64748B]">Duration:</span>
+                  <span className="text-[#0F172A] text-xs font-mono">
+                    {formatDate(effectiveContract.start_date)} → {effectiveContract.end_date ? formatDate(effectiveContract.end_date) : 'Indefinite'}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="py-6 text-center text-sm text-[#64748B]">
+                <p>No active contract effective for today.</p>
+              </div>
             )}
           </div>
 
-          {effectiveContract ? (
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between items-center py-1 border-b border-slate-100">
-                <span className="text-[#64748B]">Wage Compensation:</span>
-                <span className="font-bold text-[#0F172A]">
-                  {formatCurrency(effectiveContract.wage)}
-                  <span className="text-xs text-[#64748B] font-normal ml-1">
-                    / {effectiveContract.wage_type?.toLowerCase() || 'month'}
-                  </span>
-                </span>
-              </div>
-              <div className="flex justify-between items-center py-1 border-b border-slate-100">
-                <span className="text-[#64748B]">Salary Structure:</span>
-                <span className="font-medium text-[#0F172A]">{effectiveContract.salary_structure_name || 'Standard'}</span>
-              </div>
-              <div className="flex justify-between items-center py-1 border-b border-slate-100">
-                <span className="text-[#64748B]">Contract Duration:</span>
-                <span className="text-[#0F172A] text-xs font-mono">
-                  {formatDate(effectiveContract.start_date)} → {effectiveContract.end_date ? formatDate(effectiveContract.end_date) : 'Indefinite'}
-                </span>
-              </div>
-              <div className="pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate(`/contracts/${effectiveContract.contract_id}`)}
-                  className="w-full"
-                >
-                  View Contract Details
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="py-6 text-center text-sm text-[#64748B]">
-              <p>No active employment contract effective for today's date.</p>
-              {canUpdate && (
+          <div className="pt-3">
+            {effectiveContract ? (
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<Eye className="w-4 h-4" />}
+                onClick={() => navigate(`/contracts/${effectiveContract.contract_id}`)}
+                className="w-full"
+              >
+                View Full Contract Details
+              </Button>
+            ) : (
+              canUpdate && (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => navigate('/contracts')}
-                  className="mt-3"
+                  className="w-full"
                 >
                   Manage Contracts
                 </Button>
-              )}
-            </div>
-          )}
+              )
+            )}
+          </div>
         </div>
 
         {/* Effective Working Schedule */}
-        <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-[#2563EB]" />
-              <h2 className="text-base font-bold text-[#0F172A]">Working Schedule (Today)</h2>
+        <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-2xs space-y-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-[#2563EB]" />
+                <h2 className="text-base font-bold text-[#0F172A]">Working Schedule</h2>
+              </div>
+              {effectiveSchedule && (
+                <Badge variant="info">{effectiveSchedule.timezone || 'UTC'}</Badge>
+              )}
             </div>
-            {effectiveSchedule && (
-              <Badge variant="info">{effectiveSchedule.timezone || 'UTC'}</Badge>
+
+            {effectiveSchedule ? (
+              <div className="space-y-3 text-sm pt-2">
+                <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                  <span className="text-[#64748B]">Assigned Shift:</span>
+                  <span className="font-semibold text-[#0F172A]">{effectiveSchedule.name}</span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                  <span className="text-[#64748B]">Weekly Operating:</span>
+                  <span className="font-medium text-[#0F172A]">
+                    {effectiveSchedule.days?.filter((d) => d.is_working_day).length ?? 0} days ({effectiveSchedule.hours_per_week} hrs/wk)
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="py-6 text-center text-sm text-[#64748B]">
+                <p>No working schedule resolved for today.</p>
+              </div>
             )}
           </div>
 
-          {effectiveSchedule ? (
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between items-center py-1 border-b border-slate-100">
-                <span className="text-[#64748B]">Assigned Schedule:</span>
-                <span className="font-semibold text-[#0F172A]">{effectiveSchedule.name}</span>
+          <div className="pt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/working-schedules')}
+              className="w-full"
+            >
+              Manage Working Schedules
+            </Button>
+          </div>
+        </div>
+
+        {/* Assigned Attendance Policy */}
+        <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-2xs space-y-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-[#2563EB]" />
+                <h2 className="text-base font-bold text-[#0F172A]">Attendance Policy</h2>
               </div>
-              <div className="flex justify-between items-center py-1 border-b border-slate-100">
-                <span className="text-[#64748B]">Weekly Operating Days:</span>
-                <span className="font-medium text-[#0F172A]">
-                  {effectiveSchedule.days?.filter((d) => d.is_working_day).length ?? 0} days / week
-                </span>
-              </div>
-              <div className="pt-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate('/working-schedules')}
-                  className="w-full"
-                >
-                  View Schedules
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="py-6 text-center text-sm text-[#64748B]">
-              <p>No working schedule assigned or resolved for this employee.</p>
-              {canUpdate && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate('/working-schedules')}
-                  className="mt-3"
-                >
-                  Assign Schedule
-                </Button>
+              {assignedPolicy && (
+                <Badge variant="success">Active</Badge>
               )}
             </div>
-          )}
+
+            {assignedPolicy ? (
+              <div className="space-y-3 text-sm pt-2">
+                <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                  <span className="text-[#64748B]">Policy Name:</span>
+                  <span className="font-semibold text-[#0F172A]">{assignedPolicy.name}</span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                  <span className="text-[#64748B]">Grace Period:</span>
+                  <span className="font-medium text-[#0F172A]">
+                    {assignedPolicy.grace_period_minutes} mins ({assignedPolicy.grace_occurrences_allowed}x / mo)
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                  <span className="text-[#64748B]">Late Penalty:</span>
+                  <span className="font-semibold text-amber-700">{assignedPolicy.beyond_grace_penalty}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="py-6 text-center text-sm text-[#64748B]">
+                <p>No attendance policy assigned.</p>
+              </div>
+            )}
+          </div>
+
+          <div className="pt-3">
+            {assignedPolicy ? (
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<Eye className="w-4 h-4" />}
+                onClick={() => setIsPolicyModalOpen(true)}
+                className="w-full"
+              >
+                View Full Policy Details
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/attendance-policies')}
+                className="w-full"
+              >
+                Manage Policies
+              </Button>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* FULL CONTRACT DETAILS MODAL */}
+      {isContractModalOpen && effectiveContract && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
+              <div className="flex items-center gap-2 text-[#0F172A]">
+                <FileText className="w-5 h-5 text-[#2563EB]" />
+                <h3 className="text-lg font-bold">Contract Details — #{effectiveContract.contract_id}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsContractModalOpen(false)}
+                className="text-[#64748B] hover:text-[#0F172A] p-1 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-sm text-[#0F172A]">
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-[#64748B]">Employee:</span>
+                <span className="font-semibold">{employee.full_name} ({employee.employee_code})</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-[#64748B]">Compensation Wage:</span>
+                <span className="font-bold text-[#2563EB]">
+                  {formatCurrency(effectiveContract.wage)} / {effectiveContract.wage_type?.toLowerCase()}
+                </span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-[#64748B]">Salary Structure:</span>
+                <span className="font-medium">{effectiveContract.salary_structure_name || 'Standard Structure'}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-[#64748B]">Effective Start Date:</span>
+                <span className="font-mono">{formatDate(effectiveContract.start_date)}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-[#64748B]">End Date:</span>
+                <span className="font-mono">{effectiveContract.end_date ? formatDate(effectiveContract.end_date) : 'Indefinite / Open-ended'}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-[#64748B]">Department:</span>
+                <span>{effectiveContract.department_name || employee.department_name || 'Unassigned'}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-[#64748B]">Job Position:</span>
+                <span>{effectiveContract.position_name || employee.position_name || 'Unassigned'}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-[#64748B]">Contract Status:</span>
+                <Badge variant="success">ACTIVE</Badge>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-3">
+              <Button
+                variant="secondary"
+                onClick={() => setIsContractModalOpen(false)}
+              >
+                Close Details
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULL ATTENDANCE POLICY DETAILS MODAL */}
+      {isPolicyModalOpen && assignedPolicy && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
+              <div className="flex items-center gap-2 text-[#0F172A]">
+                <Shield className="w-5 h-5 text-[#2563EB]" />
+                <h3 className="text-lg font-bold">Policy Rules — {assignedPolicy.name}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPolicyModalOpen(false)}
+                className="text-[#64748B] hover:text-[#0F172A] p-1 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-sm text-[#0F172A]">
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-[#64748B]">Grace Period Window:</span>
+                <span className="font-semibold">{assignedPolicy.grace_period_minutes} Minutes</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-[#64748B]">Monthly Allowed Grace Occurrences:</span>
+                <span className="font-semibold">{assignedPolicy.grace_occurrences_allowed} Times / Month</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-[#64748B]">Grace Period Penalty:</span>
+                <span className="font-medium text-emerald-700">{assignedPolicy.grace_period_penalty}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-[#64748B]">Beyond Grace Penalty:</span>
+                <span className="font-bold text-amber-700">{assignedPolicy.beyond_grace_penalty}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-[#64748B]">Early Leave Grace:</span>
+                <span className="font-medium">{assignedPolicy.early_leave_grace_minutes} Minutes</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-[#64748B]">Early Leave Penalty:</span>
+                <span className="font-medium text-amber-700">{assignedPolicy.early_leave_penalty}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-[#64748B]">Stack Multiple Deductions:</span>
+                <span className="font-medium">{assignedPolicy.stack_deductions ? 'Yes (Enabled)' : 'No (Single penalty per day)'}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-[#64748B]">Policy Status:</span>
+                <Badge variant="success">ACTIVE</Badge>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-3">
+              <Button
+                variant="secondary"
+                onClick={() => setIsPolicyModalOpen(false)}
+              >
+                Close Details
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirm Status Change Dialog */}
       <ConfirmDialog

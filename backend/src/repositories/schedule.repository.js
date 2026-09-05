@@ -1,7 +1,18 @@
 const { query } = require("../db");
 
-async function listWorkingSchedules(companyId, client = null) {
+async function listWorkingSchedules(companyId, filters = {}, client = null) {
   const executor = client || { query };
+  const where = ["s.company_id = $1"];
+  const values = [companyId];
+
+  if (filters.is_active !== undefined && filters.is_active !== "all" && filters.is_active !== "any") {
+    const isActive = filters.is_active === true || filters.is_active === "true";
+    where.push(`s.is_active = $${values.length + 1}`);
+    values.push(isActive);
+  } else if (filters.is_active === undefined) {
+    where.push(`s.is_active = TRUE`);
+  }
+
   const result = await executor.query(
     `
       SELECT
@@ -31,11 +42,11 @@ async function listWorkingSchedules(companyId, client = null) {
       FROM working_schedules s
       LEFT JOIN attendance_policies ap ON ap.policy_id = s.attendance_policy_id
       LEFT JOIN schedule_days d ON d.schedule_id = s.schedule_id
-      WHERE s.company_id = $1
+      WHERE ${where.join(" AND ")}
       GROUP BY s.schedule_id, ap.name
       ORDER BY s.created_at DESC
     `,
-    [companyId]
+    values
   );
 
   return result.rows;

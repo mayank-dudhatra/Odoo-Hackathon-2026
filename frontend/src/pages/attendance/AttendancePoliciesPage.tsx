@@ -17,6 +17,7 @@ export const AttendancePoliciesPage: React.FC = () => {
   const [policies, setPolicies] = useState<AttendancePolicy[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'true' | 'false' | 'all'>('true');
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -45,14 +46,14 @@ export const AttendancePoliciesPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await attendanceApi.listPolicies();
+      const data = await attendanceApi.listPolicies({ is_active: statusFilter });
       setPolicies(data);
     } catch (err: any) {
       setError(err?.response?.data?.message || err.message || 'Failed to fetch attendance policies');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [statusFilter]);
 
   useEffect(() => {
     fetchPolicies();
@@ -147,11 +148,23 @@ export const AttendancePoliciesPage: React.FC = () => {
             Configure late-arrival grace thresholds, early leave penalties, and automatic deduction rules.
           </p>
         </div>
-        {canCreate && (
-          <Button variant="primary" leftIcon={<Plus className="w-4 h-4" />} onClick={() => handleOpenModal()}>
-            New Policy
-          </Button>
-        )}
+        <div className="flex items-center gap-3">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as 'true' | 'false' | 'all')}
+            aria-label="Filter by policy status"
+            className="px-3 py-2 text-sm bg-white border border-[#E2E8F0] rounded-lg text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+          >
+            <option value="true">Active Policies</option>
+            <option value="false">Inactive / Archived</option>
+            <option value="all">All Policies</option>
+          </select>
+          {canCreate && (
+            <Button variant="primary" leftIcon={<Plus className="w-4 h-4" />} onClick={() => handleOpenModal()}>
+              New Policy
+            </Button>
+          )}
+        </div>
       </div>
 
       {error && <ErrorAlert message={error} onRetry={fetchPolicies} />}

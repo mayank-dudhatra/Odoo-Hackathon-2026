@@ -193,10 +193,11 @@ async function updateCompanyContract(auth, contractId, payload) {
       throw new AppError(404, "Contract not found", "CONTRACT_NOT_FOUND");
     }
 
-    await lockEmployeeContractScope(client, auth.company_id, current.employee_id);
-
-    const nextEmployeeId = current.employee_id;
-    await ensureCompanyEmployee(auth.company_id, nextEmployeeId);
+    const nextEmployeeId = payload.employee_id !== undefined ? payload.employee_id : current.employee_id;
+    if (nextEmployeeId) {
+      await lockEmployeeContractScope(client, auth.company_id, nextEmployeeId);
+      await ensureCompanyEmployee(auth.company_id, nextEmployeeId);
+    }
 
     if (payload.department_id !== undefined) await ensureCompanyDepartment(auth.company_id, payload.department_id || null);
     if (payload.position_id !== undefined) await ensureCompanyPosition(auth.company_id, payload.position_id || null);

@@ -296,12 +296,15 @@ export const EmployeeFormPage: React.FC = () => {
         // If a contract was selected during onboarding, link the created employee
         if (selectedContractId) {
           try {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const effectiveStartDate = hireDate && hireDate <= todayStr ? hireDate : todayStr;
             await contractsApi.updateContract(selectedContractId, {
               employee_id: created.employee_id,
               status: 'ACTIVE',
+              start_date: effectiveStartDate,
             });
-          } catch {
-            // Non-blocking contract association fallback
+          } catch (err) {
+            console.error('Failed to link contract during employee creation:', err);
           }
         }
 
@@ -315,15 +318,23 @@ export const EmployeeFormPage: React.FC = () => {
     }
   };
 
-  // Helper arrays for options
+  // Filter managers by selected department if department is selected
+  const departmentManagers = potentialManagers.filter((m) => {
+    if (isEditing && String(m.employee_id) === String(id)) return false;
+    if (!departmentId) return true;
+    return m.department_id && String(m.department_id) === departmentId;
+  });
+
+  const filteredManagersList = departmentManagers.length > 0
+    ? departmentManagers
+    : potentialManagers.filter((m) => !isEditing || String(m.employee_id) !== String(id));
+
   const managerOptions = [
     { value: '', label: 'None (No direct manager)' },
-    ...potentialManagers
-      .filter((m) => !isEditing || String(m.employee_id) !== String(id))
-      .map((m) => ({
-        value: String(m.employee_id),
-        label: `${m.full_name || `${m.first_name} ${m.last_name}`} (${m.employee_code})`,
-      })),
+    ...filteredManagersList.map((m) => ({
+      value: String(m.employee_id),
+      label: `${m.full_name || `${m.first_name} ${m.last_name}`} (${m.employee_code})${m.department_name ? ` - ${m.department_name}` : ''}`,
+    })),
   ];
 
   const departmentOptions = [
@@ -334,16 +345,12 @@ export const EmployeeFormPage: React.FC = () => {
     })),
   ];
 
-  const availablePositions = positions.filter((p) => {
-    if (!departmentId) return true;
-    return !p.department_id || String(p.department_id) === departmentId;
-  });
-
+  // Show all positions, tagging department name if assigned
   const positionOptions = [
     { value: '', label: 'None / Select Position' },
-    ...availablePositions.map((p) => ({
+    ...positions.map((p) => ({
       value: String(p.position_id),
-      label: p.title,
+      label: p.department_name ? `${p.title} (${p.department_name})` : p.title,
     })),
   ];
 

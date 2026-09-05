@@ -61,16 +61,24 @@ export const leaveApi = {
 
   // Balances
   async getOwnLeaveBalances(): Promise<LeaveBalance[]> {
-    const res = await apiClient<{ data: LeaveBalance[] } | LeaveBalance[]>('/leave-balances/my');
+    const res = await apiClient<any>('/leave-balances/my');
     if (Array.isArray(res)) return res;
-    if (res && 'data' in res && Array.isArray(res.data)) return res.data;
+    if (res && typeof res === 'object') {
+      if (Array.isArray(res.data)) return res.data;
+      if (res.data && Array.isArray(res.data.balances)) return res.data.balances;
+      if (Array.isArray(res.balances)) return res.balances;
+    }
     return [];
   },
 
   async getEmployeeLeaveBalances(employeeId: number | string): Promise<LeaveBalance[]> {
-    const res = await apiClient<{ data: LeaveBalance[] } | LeaveBalance[]>(`/employees/${employeeId}/leave-balances`);
+    const res = await apiClient<any>(`/employees/${employeeId}/leave-balances`);
     if (Array.isArray(res)) return res;
-    if (res && 'data' in res && Array.isArray(res.data)) return res.data;
+    if (res && typeof res === 'object') {
+      if (Array.isArray(res.data)) return res.data;
+      if (res.data && Array.isArray(res.data.balances)) return res.data.balances;
+      if (Array.isArray(res.balances)) return res.balances;
+    }
     return [];
   },
 

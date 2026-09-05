@@ -22,7 +22,7 @@ export const ContractsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<string>('ACTIVE');
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
@@ -155,6 +155,7 @@ export const ContractsPage: React.FC = () => {
             <table className="w-full text-left text-sm border-collapse">
               <thead>
                 <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-xs font-semibold text-[#64748B] uppercase tracking-wider">
+                  <th className="py-3 px-4">Contract Ref</th>
                   <th className="py-3 px-4">Employee</th>
                   <th className="py-3 px-4">Department / Position</th>
                   <th className="py-3 px-4">Wage & Type</th>
@@ -167,6 +168,15 @@ export const ContractsPage: React.FC = () => {
               <tbody className="divide-y divide-[#E2E8F0]">
                 {filteredContracts.map((c) => (
                   <tr key={c.contract_id} className="hover:bg-[#F8FAFC]/60 transition-colors">
+                    <td className="py-3.5 px-4 font-semibold text-[#2563EB]">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/contracts/${c.contract_id}`)}
+                        className="hover:underline text-left"
+                      >
+                        CNT-{c.contract_id.toString().padStart(4, '0')}
+                      </button>
+                    </td>
                     <td className="py-3.5 px-4 font-medium text-[#0F172A]">
                       <div>{c.employee_name || `${c.employee_first_name || ''} ${c.employee_last_name || ''}`}</div>
                       <div className="text-xs text-[#64748B] font-normal">{c.employee_code}</div>
@@ -197,7 +207,7 @@ export const ContractsPage: React.FC = () => {
                           type="button"
                           onClick={() => navigate(`/contracts/${c.contract_id}`)}
                           className="p-1 text-[#64748B] hover:text-[#2563EB] rounded-md hover:bg-[#F1F5F9] transition-colors"
-                          title="View Details"
+                          title="View Contract Details & Assigned Employees"
                         >
                           <Eye className="w-4 h-4" />
                         </button>

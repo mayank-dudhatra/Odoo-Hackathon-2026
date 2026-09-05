@@ -8,7 +8,7 @@ const {
 const { success } = require("../utils/response");
 
 async function listAttendancePoliciesHandler(req, res) {
-  return success(res, await listCompanyAttendancePolicies(req.auth), "Attendance policies fetched");
+  return success(res, await listCompanyAttendancePolicies(req.auth, req.query), "Attendance policies fetched");
 }
 
 async function getAttendancePolicyHandler(req, res) {

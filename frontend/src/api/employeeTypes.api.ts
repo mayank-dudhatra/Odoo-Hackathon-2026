@@ -16,8 +16,9 @@ async function requestWithOrgFallback<T>(
 }
 
 export const employeeTypesApi = {
-  async getEmployeeTypes(): Promise<EmployeeType[]> {
-    const res = await requestWithOrgFallback<EmployeeType[]>('/employee-types');
+  async getEmployeeTypes(params?: { is_active?: string | boolean }): Promise<EmployeeType[]> {
+    const qs = params?.is_active !== undefined ? `?is_active=${params.is_active}` : '';
+    const res = await requestWithOrgFallback<EmployeeType[]>(`/employee-types${qs}`);
     if (Array.isArray(res)) return res as EmployeeType[];
     return res.data || [];
   },

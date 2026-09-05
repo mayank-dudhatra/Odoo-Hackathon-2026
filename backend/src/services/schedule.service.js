@@ -128,8 +128,8 @@ async function ensureCompanySchedule(companyId, scheduleId) {
   return schedule;
 }
 
-async function listSchedules(auth) {
-  const rows = await listWorkingSchedules(auth.company_id);
+async function listSchedules(auth, filters = {}) {
+  const rows = await listWorkingSchedules(auth.company_id, filters);
   return rows.map((row) => ({
     schedule_id: row.schedule_id,
     company_id: row.company_id,
@@ -251,20 +251,47 @@ async function updateSchedule(auth, scheduleId, payload) {
 
 async function deactivateSchedule(auth, scheduleId) {
   return withTransaction(async (client) => {
-    const schedule = await setWorkingScheduleActive(auth.company_id, scheduleId, false, client);
-    if (!schedule) {
+    const current = await getWorkingScheduleById(auth.company_id, scheduleId, client);
+    if (!current) {
       throw new AppError(404, "Schedule not found", "SCHEDULE_NOT_FOUND");
     }
 
-    await createAuditLog({
-      companyId: auth.company_id,
-      userId: auth.user_id,
-      module: "WORKING_SCHEDULES",
-      action: "DEACTIVATE",
-      recordId: scheduleId,
-    });
+    const empRes = await client.query(
+      `SELECT 1 FROM employees WHERE company_id = $1 AND schedule_id = $2 LIMIT 1`,
+      [auth.company_id, scheduleId]
+    );
+    const contractRes = await client.query(
+      `SELECT 1 FROM contracts WHERE company_id = $1 AND schedule_id = $2 LIMIT 1`,
+      [auth.company_id, scheduleId]
+    );
 
-    return getWorkingScheduleById(auth.company_id, scheduleId, client);
+    const isReferenced = empRes.rows.length > 0 || contractRes.rows.length > 0;
+
+    if (isReferenced) {
+      const schedule = await setWorkingScheduleActive(auth.company_id, scheduleId, false, client);
+      await createAuditLog({
+        companyId: auth.company_id,
+        userId: auth.user_id,
+        module: "WORKING_SCHEDULES",
+        action: "DEACTIVATE",
+        recordId: scheduleId,
+      });
+      return getWorkingScheduleById(auth.company_id, scheduleId, client);
+    } else {
+      await client.query(`DELETE FROM schedule_days WHERE schedule_id = $1`, [scheduleId]);
+      await client.query(`DELETE FROM working_schedules WHERE company_id = $1 AND schedule_id = $2`, [
+        auth.company_id,
+        scheduleId,
+      ]);
+      await createAuditLog({
+        companyId: auth.company_id,
+        userId: auth.user_id,
+        module: "WORKING_SCHEDULES",
+        action: "DELETE",
+        recordId: scheduleId,
+      });
+      return { schedule_id: Number(scheduleId), deleted: true };
+    }
   });
 }
 

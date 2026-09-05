@@ -21,6 +21,7 @@ const {
   getEmployeeRecord,
   updateEmployeeRecord,
   changeEmployeeStatusRecord,
+  deleteEmployeeRecord,
   getMyEmployeeRecord,
 } = require("../services/organization.service");
 const { success } = require("../utils/response");
@@ -34,7 +35,7 @@ async function updateCompanyDetails(req, res) {
 }
 
 async function listDepartments(req, res) {
-  return success(res, await listCompanyDepartments(req.auth), "Departments fetched");
+  return success(res, await listCompanyDepartments(req.auth, req.query), "Departments fetched");
 }
 
 async function getDepartment(req, res) {
@@ -50,11 +51,11 @@ async function updateDepartment(req, res) {
 }
 
 async function deactivateDepartment(req, res) {
-  return success(res, await deactivateCompanyDepartment(req.auth, req.params.id), "Department deactivated");
+  return success(res, await deactivateCompanyDepartment(req.auth, req.params.id), "Department processed");
 }
 
 async function listPositions(req, res) {
-  return success(res, await listCompanyPositions(req.auth), "Positions fetched");
+  return success(res, await listCompanyPositions(req.auth, req.query), "Positions fetched");
 }
 
 async function getPosition(req, res) {
@@ -70,11 +71,11 @@ async function updatePosition(req, res) {
 }
 
 async function deactivatePosition(req, res) {
-  return success(res, await deactivateCompanyPosition(req.auth, req.params.id), "Position deactivated");
+  return success(res, await deactivateCompanyPosition(req.auth, req.params.id), "Position processed");
 }
 
 async function listEmployeeTypes(req, res) {
-  return success(res, await listCompanyEmployeeTypes(req.auth), "Employee types fetched");
+  return success(res, await listCompanyEmployeeTypes(req.auth, req.query), "Employee types fetched");
 }
 
 async function getEmployeeType(req, res) {
@@ -117,6 +118,10 @@ async function changeEmployeeStatus(req, res) {
   return success(res, await changeEmployeeStatusRecord(req.auth, req.params.id, req.body.status), "Employee status updated");
 }
 
+async function deleteEmployee(req, res) {
+  return success(res, await deleteEmployeeRecord(req.auth, req.params.id), "Employee processed");
+}
+
 module.exports = {
   currentCompany,
   updateCompanyDetails,
@@ -141,4 +146,5 @@ module.exports = {
   createEmployee,
   updateEmployee,
   changeEmployeeStatus,
+  deleteEmployee,
 };

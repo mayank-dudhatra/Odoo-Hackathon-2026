@@ -23,6 +23,7 @@ export const DepartmentsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'true' | 'false' | 'all'>('true');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -35,7 +36,7 @@ export const DepartmentsPage: React.FC = () => {
   const fetchData = useCallback(async () => {
     try {
       const [depList, empRes] = await Promise.all([
-        departmentsApi.getDepartments(),
+        departmentsApi.getDepartments({ is_active: statusFilter }),
         employeesApi.getEmployees({ limit: 100 }).catch(() => ({ rows: [] })),
       ]);
       setDepartments(depList);
@@ -46,14 +47,15 @@ export const DepartmentsPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [statusFilter]);
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
+        setIsLoading(true);
         const [depList, empRes] = await Promise.all([
-          departmentsApi.getDepartments(),
+          departmentsApi.getDepartments({ is_active: statusFilter }),
           employeesApi.getEmployees({ limit: 100 }).catch(() => ({ rows: [] })),
         ]);
         if (active) {
@@ -70,7 +72,7 @@ export const DepartmentsPage: React.FC = () => {
       }
     })();
     return () => { active = false; };
-  }, []);
+  }, [statusFilter]);
 
   const handleCreate = () => {
     setDepartmentToEdit(null);
@@ -90,7 +92,7 @@ export const DepartmentsPage: React.FC = () => {
       setDeactivateId(null);
       fetchData();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to deactivate department';
+      const msg = err instanceof Error ? err.message : 'Failed to delete department';
       alert(msg);
     } finally {
       setIsDeactivating(false);
@@ -131,6 +133,18 @@ export const DepartmentsPage: React.FC = () => {
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-[#E2E8F0] rounded-lg text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-colors"
           />
+        </div>
+        <div className="w-full sm:w-auto">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as 'true' | 'false' | 'all')}
+            aria-label="Filter by department status"
+            className="w-full sm:w-48 px-3 py-2 text-sm bg-white border border-[#E2E8F0] rounded-lg text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+          >
+            <option value="true">Active Departments</option>
+            <option value="false">Inactive / Archived</option>
+            <option value="all">All Departments</option>
+          </select>
         </div>
       </div>
 

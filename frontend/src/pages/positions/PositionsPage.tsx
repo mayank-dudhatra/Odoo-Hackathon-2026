@@ -24,6 +24,7 @@ export const PositionsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [selectedDeptFilter, setSelectedDeptFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'true' | 'false' | 'all'>('true');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -36,7 +37,7 @@ export const PositionsPage: React.FC = () => {
   const fetchData = useCallback(async () => {
     try {
       const [posList, deptList] = await Promise.all([
-        positionsApi.getPositions(),
+        positionsApi.getPositions({ is_active: statusFilter }),
         departmentsApi.getDepartments().catch(() => []),
       ]);
       setPositions(posList);
@@ -47,14 +48,15 @@ export const PositionsPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [statusFilter]);
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
+        setIsLoading(true);
         const [posList, deptList] = await Promise.all([
-          positionsApi.getPositions(),
+          positionsApi.getPositions({ is_active: statusFilter }),
           departmentsApi.getDepartments().catch(() => []),
         ]);
         if (active) {
@@ -71,7 +73,7 @@ export const PositionsPage: React.FC = () => {
       }
     })();
     return () => { active = false; };
-  }, []);
+  }, [statusFilter]);
 
   const handleCreate = () => {
     setPositionToEdit(null);
@@ -91,7 +93,7 @@ export const PositionsPage: React.FC = () => {
       setDeactivateId(null);
       fetchData();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to deactivate position';
+      const msg = err instanceof Error ? err.message : 'Failed to delete position';
       alert(msg);
     } finally {
       setIsDeactivating(false);
@@ -141,7 +143,7 @@ export const PositionsPage: React.FC = () => {
             value={selectedDeptFilter}
             onChange={(e) => setSelectedDeptFilter(e.target.value)}
             aria-label="Filter positions by department"
-            className="w-full sm:w-56 px-3 py-2 text-sm bg-white border border-[#E2E8F0] rounded-lg text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+            className="w-full sm:w-48 px-3 py-2 text-sm bg-white border border-[#E2E8F0] rounded-lg text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
           >
             <option value="">All Departments</option>
             {departments.map((d) => (
@@ -151,6 +153,17 @@ export const PositionsPage: React.FC = () => {
             ))}
           </select>
         )}
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as 'true' | 'false' | 'all')}
+          aria-label="Filter by position status"
+          className="w-full sm:w-48 px-3 py-2 text-sm bg-white border border-[#E2E8F0] rounded-lg text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+        >
+          <option value="true">Active Positions</option>
+          <option value="false">Inactive / Archived</option>
+          <option value="all">All Positions</option>
+        </select>
       </div>
 
       {/* Main Table Content */}

@@ -20,6 +20,7 @@ export const EmployeeTypesPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'true' | 'false' | 'all'>('true');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,7 +28,7 @@ export const EmployeeTypesPage: React.FC = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const list = await employeeTypesApi.getEmployeeTypes();
+      const list = await employeeTypesApi.getEmployeeTypes({ is_active: statusFilter });
       setTypes(list);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch employee types';
@@ -35,13 +36,14 @@ export const EmployeeTypesPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [statusFilter]);
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const list = await employeeTypesApi.getEmployeeTypes();
+        setIsLoading(true);
+        const list = await employeeTypesApi.getEmployeeTypes({ is_active: statusFilter });
         if (active) setTypes(list);
       } catch (err: unknown) {
         if (active) {
@@ -53,7 +55,7 @@ export const EmployeeTypesPage: React.FC = () => {
       }
     })();
     return () => { active = false; };
-  }, []);
+  }, [statusFilter]);
 
   const handleCreate = () => {
     setTypeToEdit(null);
@@ -97,8 +99,8 @@ export const EmployeeTypesPage: React.FC = () => {
       </div>
 
       {/* Filter / Search Bar */}
-      <div className="bg-white rounded-xl border border-[#E2E8F0] p-4 shadow-2xs flex items-center">
-        <div className="relative flex-1">
+      <div className="bg-white rounded-xl border border-[#E2E8F0] p-4 shadow-2xs flex flex-col sm:flex-row items-center gap-4">
+        <div className="relative flex-1 w-full">
           <Search className="w-4 h-4 text-[#94A3B8] absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
@@ -107,6 +109,18 @@ export const EmployeeTypesPage: React.FC = () => {
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-[#E2E8F0] rounded-lg text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-colors"
           />
+        </div>
+        <div className="w-full sm:w-auto">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as 'true' | 'false' | 'all')}
+            aria-label="Filter by employee type status"
+            className="w-full sm:w-48 px-3 py-2 text-sm bg-white border border-[#E2E8F0] rounded-lg text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+          >
+            <option value="true">Active Types</option>
+            <option value="false">Inactive / Archived</option>
+            <option value="all">All Employee Types</option>
+          </select>
         </div>
       </div>
 

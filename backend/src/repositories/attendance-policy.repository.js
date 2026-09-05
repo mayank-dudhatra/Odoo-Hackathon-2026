@@ -1,7 +1,18 @@
 const { query } = require("../db");
 
-async function listAttendancePolicies(companyId, client = null) {
+async function listAttendancePolicies(companyId, filters = {}, client = null) {
   const executor = client || { query };
+  const where = ["company_id = $1"];
+  const values = [companyId];
+
+  if (filters.is_active !== undefined && filters.is_active !== "all" && filters.is_active !== "any") {
+    const isActive = filters.is_active === true || filters.is_active === "true";
+    where.push(`is_active = $${values.length + 1}`);
+    values.push(isActive);
+  } else if (filters.is_active === undefined) {
+    where.push(`is_active = TRUE`);
+  }
+
   const result = await executor.query(
     `
       SELECT
@@ -19,10 +30,10 @@ async function listAttendancePolicies(companyId, client = null) {
         created_at,
         updated_at
       FROM attendance_policies
-      WHERE company_id = $1
+      WHERE ${where.join(" AND ")}
       ORDER BY created_at DESC
     `,
-    [companyId]
+    values
   );
   return result.rows;
 }

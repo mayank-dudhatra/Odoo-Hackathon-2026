@@ -16,8 +16,12 @@ async function requestWithOrgFallback<T>(
 }
 
 export const positionsApi = {
-  async getPositions(): Promise<Position[]> {
-    const res = await requestWithOrgFallback<Position[]>('/positions');
+  async getPositions(params?: { is_active?: string | boolean; department_id?: string | number }): Promise<Position[]> {
+    const query = new URLSearchParams();
+    if (params?.is_active !== undefined) query.set('is_active', String(params.is_active));
+    if (params?.department_id !== undefined) query.set('department_id', String(params.department_id));
+    const qs = query.toString();
+    const res = await requestWithOrgFallback<Position[]>(`/positions${qs ? `?${qs}` : ''}`);
     if (Array.isArray(res)) return res as Position[];
     return res.data || [];
   },

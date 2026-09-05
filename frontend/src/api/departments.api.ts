@@ -16,8 +16,9 @@ async function requestWithOrgFallback<T>(
 }
 
 export const departmentsApi = {
-  async getDepartments(): Promise<Department[]> {
-    const res = await requestWithOrgFallback<Department[]>('/departments');
+  async getDepartments(params?: { is_active?: string | boolean }): Promise<Department[]> {
+    const qs = params?.is_active !== undefined ? `?is_active=${params.is_active}` : '';
+    const res = await requestWithOrgFallback<Department[]>(`/departments${qs}`);
     if (Array.isArray(res)) return res as Department[];
     return res.data || [];
   },

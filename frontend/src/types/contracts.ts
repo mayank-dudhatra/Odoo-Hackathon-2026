@@ -1,6 +1,23 @@
 export type WageType = 'MONTHLY' | 'HOURLY' | 'ANNUAL';
 export type ContractStatus = 'DRAFT' | 'ACTIVE' | 'EXPIRED' | 'TERMINATED';
 
+export interface ContractAssignedEmployee {
+  employee_id: number;
+  employee_name: string;
+  first_name?: string;
+  last_name?: string;
+  employee_code?: string;
+  email?: string;
+  phone?: string;
+  hire_date?: string;
+  status?: string;
+  department_name?: string;
+  position_name?: string;
+  contract_status?: ContractStatus;
+  contract_start_date?: string;
+  contract_end_date?: string | null;
+}
+
 export interface Contract {
   contract_id: number;
   company_id: number;
@@ -25,6 +42,7 @@ export interface Contract {
   status: ContractStatus;
   created_at: string;
   updated_at: string;
+  assigned_employees?: ContractAssignedEmployee[];
 }
 
 export interface CreateContractPayload {

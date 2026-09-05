@@ -9,7 +9,7 @@ const {
 const { success } = require("../utils/response");
 
 async function listWorkingSchedules(req, res) {
-  return success(res, await listSchedules(req.auth), "Working schedules fetched");
+  return success(res, await listSchedules(req.auth, req.query), "Working schedules fetched");
 }
 
 async function getWorkingSchedule(req, res) {

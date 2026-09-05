@@ -15,6 +15,7 @@ export const SchedulesPage: React.FC = () => {
   const [schedules, setSchedules] = useState<WorkingSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'true' | 'false' | 'all'>('true');
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<WorkingSchedule | null>(null);
@@ -29,14 +30,14 @@ export const SchedulesPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await schedulesApi.listSchedules();
+      const data = await schedulesApi.listSchedules({ is_active: statusFilter });
       setSchedules(data);
     } catch (err: any) {
       setError(err?.response?.data?.message || err.message || 'Failed to fetch schedules');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [statusFilter]);
 
   useEffect(() => {
     fetchSchedules();
@@ -50,7 +51,7 @@ export const SchedulesPage: React.FC = () => {
       setDeleteId(null);
       fetchSchedules();
     } catch (err: any) {
-      alert(err?.response?.data?.message || 'Failed to deactivate schedule');
+      alert(err?.response?.data?.message || 'Failed to delete schedule');
     } finally {
       setDeleteLoading(false);
     }
@@ -76,11 +77,23 @@ export const SchedulesPage: React.FC = () => {
             Manage standard operating hours, weekly shifts, and working days.
           </p>
         </div>
-        {canCreate && (
-          <Button variant="primary" leftIcon={<Plus className="w-4 h-4" />} onClick={handleCreate}>
-            New Schedule
-          </Button>
-        )}
+        <div className="flex items-center gap-3">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as 'true' | 'false' | 'all')}
+            aria-label="Filter by schedule status"
+            className="px-3 py-2 text-sm bg-white border border-[#E2E8F0] rounded-lg text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB]"
+          >
+            <option value="true">Active Schedules</option>
+            <option value="false">Inactive / Archived</option>
+            <option value="all">All Schedules</option>
+          </select>
+          {canCreate && (
+            <Button variant="primary" leftIcon={<Plus className="w-4 h-4" />} onClick={handleCreate}>
+              New Schedule
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Main Content */}

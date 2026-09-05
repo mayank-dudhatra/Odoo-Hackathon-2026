@@ -6,8 +6,9 @@ import type {
 } from '../types/schedules';
 
 export const schedulesApi = {
-  async listSchedules(): Promise<WorkingSchedule[]> {
-    const res = await apiClient<{ data: WorkingSchedule[] } | WorkingSchedule[]>('/working-schedules');
+  async listSchedules(params?: { is_active?: string | boolean }): Promise<WorkingSchedule[]> {
+    const qs = params?.is_active !== undefined ? `?is_active=${params.is_active}` : '';
+    const res = await apiClient<{ data: WorkingSchedule[] } | WorkingSchedule[]>(`/working-schedules${qs}`);
     if (Array.isArray(res)) return res;
     if (res && 'data' in res && Array.isArray(res.data)) return res.data;
     return [];

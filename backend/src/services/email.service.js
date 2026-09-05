@@ -5,16 +5,27 @@ let transporter = null;
 
 function getTransporter() {
   if (!transporter) {
-    if (env.smtp.host && env.smtp.user && env.smtp.password) {
-      transporter = nodemailer.createTransport({
-        host: env.smtp.host,
-        port: env.smtp.port,
-        secure: env.smtp.port === 465, // true for 465, false for 587 or other ports
-        auth: {
-          user: env.smtp.user,
-          pass: env.smtp.password,
-        },
-      });
+    if (env.smtp.user && env.smtp.password) {
+      const isGmail = (env.smtp.host && env.smtp.host.includes("gmail")) || (env.smtp.user && env.smtp.user.endsWith("@gmail.com"));
+      if (isGmail) {
+        transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: {
+            user: env.smtp.user,
+            pass: env.smtp.password,
+          },
+        });
+      } else if (env.smtp.host) {
+        transporter = nodemailer.createTransport({
+          host: env.smtp.host,
+          port: env.smtp.port,
+          secure: env.smtp.port === 465,
+          auth: {
+            user: env.smtp.user,
+            pass: env.smtp.password,
+          },
+        });
+      }
     }
   }
   return transporter;

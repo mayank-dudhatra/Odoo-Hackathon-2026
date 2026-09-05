@@ -9,8 +9,8 @@ const {
   setAttendancePolicyActive,
 } = require("../repositories/attendance-policy.repository");
 
-async function listCompanyAttendancePolicies(auth) {
-  return listAttendancePolicies(auth.company_id);
+async function listCompanyAttendancePolicies(auth, filters = {}) {
+  return listAttendancePolicies(auth.company_id, filters);
 }
 
 async function getCompanyAttendancePolicy(auth, policyId) {
@@ -86,17 +86,35 @@ async function deactivateCompanyAttendancePolicy(auth, policyId) {
       throw new AppError(404, "Attendance policy not found", "ATTENDANCE_POLICY_NOT_FOUND");
     }
 
-    const deactivated = await setAttendancePolicyActive(auth.company_id, policyId, false, client);
+    const schedRes = await client.query(
+      `SELECT 1 FROM working_schedules WHERE company_id = $1 AND attendance_policy_id = $2 LIMIT 1`,
+      [auth.company_id, policyId]
+    );
 
-    await createAuditLog({
-      companyId: auth.company_id,
-      userId: auth.user_id,
-      module: "ATTENDANCE_POLICIES",
-      action: "DEACTIVATE",
-      recordId: policyId,
-    });
-
-    return deactivated;
+    if (schedRes.rows.length > 0) {
+      const deactivated = await setAttendancePolicyActive(auth.company_id, policyId, false, client);
+      await createAuditLog({
+        companyId: auth.company_id,
+        userId: auth.user_id,
+        module: "ATTENDANCE_POLICIES",
+        action: "DEACTIVATE",
+        recordId: policyId,
+      });
+      return deactivated;
+    } else {
+      await client.query(`DELETE FROM attendance_policies WHERE company_id = $1 AND policy_id = $2`, [
+        auth.company_id,
+        policyId,
+      ]);
+      await createAuditLog({
+        companyId: auth.company_id,
+        userId: auth.user_id,
+        module: "ATTENDANCE_POLICIES",
+        action: "DELETE",
+        recordId: policyId,
+      });
+      return { policy_id: Number(policyId), deleted: true };
+    }
   });
 }
 

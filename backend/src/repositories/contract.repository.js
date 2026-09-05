@@ -66,7 +66,13 @@ async function getContractById(companyId, contractId, client = null) {
         c.company_id,
         c.employee_id,
         CONCAT(e.first_name, ' ', e.last_name) AS employee_name,
+        e.first_name AS employee_first_name,
+        e.last_name AS employee_last_name,
         e.employee_code,
+        e.email AS employee_email,
+        e.phone AS employee_phone,
+        e.hire_date AS employee_hire_date,
+        e.status AS employee_status,
         c.position_id,
         p.title AS position_name,
         c.department_id,
@@ -95,7 +101,39 @@ async function getContractById(companyId, contractId, client = null) {
     [companyId, contractId]
   );
 
-  return result.rows[0] || null;
+  const contract = result.rows[0] || null;
+  if (!contract) return null;
+
+  const employeesResult = await executor.query(
+    `
+      SELECT
+        e.employee_id,
+        CONCAT(e.first_name, ' ', e.last_name) AS employee_name,
+        e.first_name,
+        e.last_name,
+        e.employee_code,
+        e.email,
+        e.phone,
+        e.hire_date,
+        e.status,
+        d.name AS department_name,
+        p.title AS position_name,
+        c.contract_id,
+        c.status AS contract_status,
+        c.start_date AS contract_start_date,
+        c.end_date AS contract_end_date
+      FROM contracts c
+      JOIN employees e ON e.employee_id = c.employee_id
+      LEFT JOIN departments d ON d.department_id = e.department_id
+      LEFT JOIN positions p ON p.position_id = e.position_id
+      WHERE c.company_id = $1 AND c.contract_id = $2
+      ORDER BY e.first_name ASC
+    `,
+    [companyId, contractId]
+  );
+
+  contract.assigned_employees = employeesResult.rows;
+  return contract;
 }
 
 async function createContract(companyId, payload, client = null) {
@@ -144,7 +182,7 @@ async function updateContract(companyId, contractId, payload, client = null) {
   const values = [];
 
   for (const [key, value] of Object.entries(payload)) {
-    if (key === "employee_id" || key === "created_by") continue;
+    if (key === "created_by") continue;
     fields.push(`${key} = $${values.length + 1}`);
     values.push(value);
   }

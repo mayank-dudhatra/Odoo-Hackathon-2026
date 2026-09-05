@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Edit2, Calendar, DollarSign, Briefcase, Clock, Building2, User } from 'lucide-react';
+import { ArrowLeft, Edit2, Calendar, DollarSign, Briefcase, Clock, Building2, User, Users, ExternalLink, Mail, Phone } from 'lucide-react';
 import { contractsApi } from '../../api/contracts.api';
 import type { Contract, ContractStatus } from '../../types/contracts';
 import { Button } from '../../components/common/Button';
@@ -87,7 +87,7 @@ export const ContractDetailPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-10">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-[#E2E8F0]">
         <div className="flex items-center gap-3">
@@ -102,12 +102,12 @@ export const ContractDetailPage: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-[#0F172A] tracking-tight">
-                Contract #{contract.contract_id}
+                Contract #CNT-{contract.contract_id.toString().padStart(4, '0')}
               </h1>
               {getStatusBadge(contract.status)}
             </div>
             <p className="text-xs text-[#64748B] mt-0.5">
-              Employee: {contract.employee_name || `${contract.employee_first_name || ''} ${contract.employee_last_name || ''}`} ({contract.employee_code})
+              Assigned Employee: {contract.employee_name || `${contract.employee_first_name || ''} ${contract.employee_last_name || ''}`} ({contract.employee_code})
             </p>
           </div>
         </div>
@@ -207,6 +207,104 @@ export const ContractDetailPage: React.FC = () => {
               <span>{contract.schedule_name || 'Standard Working Schedule'}</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Assigned Employees / Users Section */}
+      <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-xs overflow-hidden mt-6">
+        <div className="p-5 border-b border-[#E2E8F0] flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-[#EFF6FF] text-[#2563EB]">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-[#0F172A]">Assigned Employees / Users under this Contract</h2>
+              <p className="text-xs text-[#64748B]">
+                List of all active user records holding this employment contract assignment.
+              </p>
+            </div>
+          </div>
+          <Badge variant="neutral">
+            {(contract.assigned_employees?.length || 1)} Assigned
+          </Badge>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm border-collapse">
+            <thead>
+              <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-xs font-semibold text-[#64748B] uppercase tracking-wider">
+                <th className="py-3 px-4">Employee</th>
+                <th className="py-3 px-4">Code</th>
+                <th className="py-3 px-4">Contact Details</th>
+                <th className="py-3 px-4">Department / Position</th>
+                <th className="py-3 px-4">Hire Date</th>
+                <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#E2E8F0]">
+              {(contract.assigned_employees && contract.assigned_employees.length > 0
+                ? contract.assigned_employees
+                : [
+                    {
+                      employee_id: contract.employee_id,
+                      employee_name: contract.employee_name || `${contract.employee_first_name || ''} ${contract.employee_last_name || ''}`,
+                      employee_code: contract.employee_code,
+                      email: (contract as any).employee_email,
+                      phone: (contract as any).employee_phone,
+                      department_name: contract.department_name,
+                      position_name: contract.position_name,
+                      hire_date: (contract as any).employee_hire_date,
+                      status: (contract as any).employee_status || 'ACTIVE',
+                    },
+                  ]
+              ).map((emp) => (
+                <tr key={emp.employee_id} className="hover:bg-[#F8FAFC]/60 transition-colors">
+                  <td className="py-3.5 px-4 font-medium text-[#0F172A]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-[#EFF6FF] text-[#2563EB] font-bold text-xs flex items-center justify-center border border-blue-200 shrink-0">
+                        {emp.employee_name?.[0] || 'E'}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-[#0F172A]">{emp.employee_name}</div>
+                        <div className="text-xs text-[#64748B]">{emp.email || '—'}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3.5 px-4 font-mono text-xs text-[#475569]">
+                    {emp.employee_code || '—'}
+                  </td>
+                  <td className="py-3.5 px-4 text-xs text-[#475569]">
+                    {emp.email && <div className="flex items-center gap-1"><Mail className="w-3 h-3 text-[#64748B]" />{emp.email}</div>}
+                    {emp.phone && <div className="flex items-center gap-1 text-[#64748B]"><Phone className="w-3 h-3 text-[#64748B]" />{emp.phone}</div>}
+                    {!emp.email && !emp.phone && '—'}
+                  </td>
+                  <td className="py-3.5 px-4 text-[#475569]">
+                    <div className="font-medium text-[#0F172A]">{emp.department_name || '—'}</div>
+                    <div className="text-xs text-[#64748B]">{emp.position_name || ''}</div>
+                  </td>
+                  <td className="py-3.5 px-4 text-[#64748B] text-xs">
+                    {emp.hire_date ? formatDate(emp.hire_date) : '—'}
+                  </td>
+                  <td className="py-3.5 px-4">
+                    <Badge variant={emp.status === 'ACTIVE' ? 'success' : 'neutral'}>
+                      {emp.status || 'ACTIVE'}
+                    </Badge>
+                  </td>
+                  <td className="py-3.5 px-4 text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate(`/employees/${emp.employee_id}`)}
+                      rightIcon={<ExternalLink className="w-3 h-3" />}
+                    >
+                      View Profile
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 

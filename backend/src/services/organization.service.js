@@ -15,21 +15,25 @@ const {
   createDepartment,
   updateDepartment,
   setDepartmentActive,
+  hardDeleteDepartment,
   listPositions,
   getPositionById,
   createPosition,
   updatePosition,
   setPositionActive,
+  hardDeletePosition,
   listEmployeeTypes,
   getEmployeeTypeById,
   createEmployeeType,
   updateEmployeeType,
   setEmployeeTypeActive,
+  hardDeleteEmployeeType,
   getEmployeeById,
   listEmployees,
   createEmployee,
   updateEmployee,
   updateEmployeeStatus,
+  hardDeleteEmployee,
   findEmployeeById,
   listManagerChain,
 } = require("../repositories/organization.repository");
@@ -130,8 +134,8 @@ async function updateCurrentCompany(auth, payload) {
   return mapCompany(updated);
 }
 
-async function listCompanyDepartments(auth) {
-  return listDepartments(auth.company_id).then((rows) => rows.map(mapDepartment));
+async function listCompanyDepartments(auth, filters = {}) {
+  return listDepartments(auth.company_id, filters).then((rows) => rows.map(mapDepartment));
 }
 
 async function getCompanyDepartment(auth, departmentId) {
@@ -201,24 +205,51 @@ async function updateCompanyDepartment(auth, departmentId, payload) {
 }
 
 async function deactivateCompanyDepartment(auth, departmentId) {
-  const department = await setDepartmentActive(auth.company_id, departmentId, false);
-  if (!department) {
+  const current = await getDepartmentById(auth.company_id, departmentId);
+  if (!current) {
     throw new AppError(404, "Department not found", "DEPARTMENT_NOT_FOUND");
   }
 
-  await createAuditLog({
-    companyId: auth.company_id,
-    userId: auth.user_id,
-    module: "DEPARTMENTS",
-    action: "DEACTIVATE",
-    recordId: departmentId,
-  });
+  const childDepRes = await query(
+    `SELECT 1 FROM departments WHERE company_id = $1 AND parent_department_id = $2 LIMIT 1`,
+    [auth.company_id, departmentId]
+  );
+  const posRes = await query(
+    `SELECT 1 FROM positions WHERE company_id = $1 AND department_id = $2 LIMIT 1`,
+    [auth.company_id, departmentId]
+  );
+  const empRes = await query(
+    `SELECT 1 FROM employees WHERE company_id = $1 AND department_id = $2 LIMIT 1`,
+    [auth.company_id, departmentId]
+  );
 
-  return mapDepartment(department);
+  const isReferenced = childDepRes.rows.length > 0 || posRes.rows.length > 0 || empRes.rows.length > 0;
+
+  if (isReferenced) {
+    const department = await setDepartmentActive(auth.company_id, departmentId, false);
+    await createAuditLog({
+      companyId: auth.company_id,
+      userId: auth.user_id,
+      module: "DEPARTMENTS",
+      action: "DEACTIVATE",
+      recordId: departmentId,
+    });
+    return mapDepartment(department);
+  } else {
+    await hardDeleteDepartment(auth.company_id, departmentId);
+    await createAuditLog({
+      companyId: auth.company_id,
+      userId: auth.user_id,
+      module: "DEPARTMENTS",
+      action: "DELETE",
+      recordId: departmentId,
+    });
+    return { department_id: Number(departmentId), deleted: true };
+  }
 }
 
-async function listCompanyPositions(auth) {
-  return listPositions(auth.company_id).then((rows) => rows.map(mapPosition));
+async function listCompanyPositions(auth, filters = {}) {
+  return listPositions(auth.company_id, filters).then((rows) => rows.map(mapPosition));
 }
 
 async function getCompanyPosition(auth, positionId) {
@@ -278,24 +309,41 @@ async function updateCompanyPosition(auth, positionId, payload) {
 }
 
 async function deactivateCompanyPosition(auth, positionId) {
-  const position = await setPositionActive(auth.company_id, positionId, false);
-  if (!position) {
+  const current = await getPositionById(auth.company_id, positionId);
+  if (!current) {
     throw new AppError(404, "Position not found", "POSITION_NOT_FOUND");
   }
 
-  await createAuditLog({
-    companyId: auth.company_id,
-    userId: auth.user_id,
-    module: "POSITIONS",
-    action: "DEACTIVATE",
-    recordId: positionId,
-  });
+  const empRes = await query(
+    `SELECT 1 FROM employees WHERE company_id = $1 AND position_id = $2 LIMIT 1`,
+    [auth.company_id, positionId]
+  );
 
-  return mapPosition(position);
+  if (empRes.rows.length > 0) {
+    const position = await setPositionActive(auth.company_id, positionId, false);
+    await createAuditLog({
+      companyId: auth.company_id,
+      userId: auth.user_id,
+      module: "POSITIONS",
+      action: "DEACTIVATE",
+      recordId: positionId,
+    });
+    return mapPosition(position);
+  } else {
+    await hardDeletePosition(auth.company_id, positionId);
+    await createAuditLog({
+      companyId: auth.company_id,
+      userId: auth.user_id,
+      module: "POSITIONS",
+      action: "DELETE",
+      recordId: positionId,
+    });
+    return { position_id: Number(positionId), deleted: true };
+  }
 }
 
-async function listCompanyEmployeeTypes(auth) {
-  return listEmployeeTypes(auth.company_id).then((rows) => rows.map(mapEmployeeType));
+async function listCompanyEmployeeTypes(auth, filters = {}) {
+  return listEmployeeTypes(auth.company_id, filters).then((rows) => rows.map(mapEmployeeType));
 }
 
 async function getCompanyEmployeeType(auth, employeeTypeId) {
@@ -345,10 +393,30 @@ async function updateCompanyEmployeeType(auth, employeeTypeId, payload) {
 }
 
 async function setCompanyEmployeeTypeActive(auth, employeeTypeId, isActive) {
-  const employeeType = await setEmployeeTypeActive(auth.company_id, employeeTypeId, isActive);
-  if (!employeeType) {
+  const current = await getEmployeeTypeById(auth.company_id, employeeTypeId);
+  if (!current) {
     throw new AppError(404, "Employee type not found", "EMPLOYEE_TYPE_NOT_FOUND");
   }
+
+  if (isActive === false) {
+    const empRes = await query(
+      `SELECT 1 FROM employees WHERE company_id = $1 AND employee_type_id = $2 LIMIT 1`,
+      [auth.company_id, employeeTypeId]
+    );
+    if (empRes.rows.length === 0) {
+      await hardDeleteEmployeeType(auth.company_id, employeeTypeId);
+      await createAuditLog({
+        companyId: auth.company_id,
+        userId: auth.user_id,
+        module: "EMPLOYEE_TYPES",
+        action: "DELETE",
+        recordId: employeeTypeId,
+      });
+      return { employee_type_id: Number(employeeTypeId), deleted: true };
+    }
+  }
+
+  const employeeType = await setEmployeeTypeActive(auth.company_id, employeeTypeId, isActive);
 
   await createAuditLog({
     companyId: auth.company_id,
@@ -368,11 +436,14 @@ async function createEmployeeRecord(auth, payload) {
 
   if (payload.schedule_id) {
     const scheduleResult = await query(
-      `SELECT schedule_id FROM working_schedules WHERE company_id = $1 AND schedule_id = $2 LIMIT 1`,
+      `SELECT schedule_id, is_active FROM working_schedules WHERE company_id = $1 AND schedule_id = $2 LIMIT 1`,
       [auth.company_id, payload.schedule_id]
     );
     if (!scheduleResult.rows[0]) {
       throw new AppError(400, "Employee schedule must belong to the same company", "CROSS_COMPANY_REFERENCE");
+    }
+    if (!scheduleResult.rows[0].is_active) {
+      throw new AppError(400, "Cannot assign an inactive schedule to an employee", "INACTIVE_SCHEDULE");
     }
   }
 
@@ -460,13 +531,16 @@ async function updateEmployeeRecord(auth, employeeId, payload) {
   if (payload.employee_type_id !== undefined) {
     await ensureEmployeeTypeBelongsToCompany(auth.company_id, payload.employee_type_id);
   }
-  if (payload.schedule_id !== undefined) {
+  if (payload.schedule_id !== undefined && payload.schedule_id !== null) {
     const scheduleResult = await query(
-      `SELECT schedule_id FROM working_schedules WHERE company_id = $1 AND schedule_id = $2 LIMIT 1`,
+      `SELECT schedule_id, is_active FROM working_schedules WHERE company_id = $1 AND schedule_id = $2 LIMIT 1`,
       [auth.company_id, payload.schedule_id]
     );
-    if (!scheduleResult.rows[0] && payload.schedule_id !== null) {
+    if (!scheduleResult.rows[0]) {
       throw new AppError(400, "Employee schedule must belong to the same company", "CROSS_COMPANY_REFERENCE");
+    }
+    if (!scheduleResult.rows[0].is_active) {
+      throw new AppError(400, "Cannot assign an inactive schedule to an employee", "INACTIVE_SCHEDULE");
     }
   }
 
@@ -539,6 +613,46 @@ async function getMyEmployeeRecord(auth) {
   return getEmployeeRecord(auth, auth.employee_id);
 }
 
+async function deleteEmployeeRecord(auth, employeeId) {
+  const current = await getEmployeeById(auth.company_id, employeeId);
+  if (!current) {
+    throw new AppError(404, "Employee not found", "EMPLOYEE_NOT_FOUND");
+  }
+
+  const userCheck = await query(`SELECT 1 FROM users WHERE company_id = $1 AND employee_id = $2 LIMIT 1`, [auth.company_id, employeeId]);
+  const attCheck = await query(`SELECT 1 FROM attendance_logs WHERE company_id = $1 AND employee_id = $2 LIMIT 1`, [auth.company_id, employeeId]);
+  const leaveReqCheck = await query(`SELECT 1 FROM leave_requests WHERE company_id = $1 AND employee_id = $2 LIMIT 1`, [auth.company_id, employeeId]);
+  const leaveAllocCheck = await query(`SELECT 1 FROM leave_allocations WHERE company_id = $1 AND employee_id = $2 LIMIT 1`, [auth.company_id, employeeId]);
+  const contractCheck = await query(`SELECT 1 FROM contracts WHERE company_id = $1 AND employee_id = $2 LIMIT 1`, [auth.company_id, employeeId]);
+  const payslipCheck = await query(`SELECT 1 FROM payslips WHERE company_id = $1 AND employee_id = $2 LIMIT 1`, [auth.company_id, employeeId]);
+  const deptMgrCheck = await query(`SELECT 1 FROM departments WHERE company_id = $1 AND manager_id = $2 LIMIT 1`, [auth.company_id, employeeId]);
+  const empMgrCheck = await query(`SELECT 1 FROM employees WHERE company_id = $1 AND manager_id = $2 LIMIT 1`, [auth.company_id, employeeId]);
+
+  const isReferenced =
+    userCheck.rows.length > 0 ||
+    attCheck.rows.length > 0 ||
+    leaveReqCheck.rows.length > 0 ||
+    leaveAllocCheck.rows.length > 0 ||
+    contractCheck.rows.length > 0 ||
+    payslipCheck.rows.length > 0 ||
+    deptMgrCheck.rows.length > 0 ||
+    empMgrCheck.rows.length > 0;
+
+  if (isReferenced) {
+    return changeEmployeeStatusRecord(auth, employeeId, "INACTIVE");
+  } else {
+    await hardDeleteEmployee(auth.company_id, employeeId);
+    await createAuditLog({
+      companyId: auth.company_id,
+      userId: auth.user_id,
+      module: "EMPLOYEES",
+      action: "DELETE",
+      recordId: employeeId,
+    });
+    return { employee_id: Number(employeeId), deleted: true };
+  }
+}
+
 module.exports = {
   getCurrentCompany,
   updateCurrentCompany,
@@ -562,5 +676,6 @@ module.exports = {
   getEmployeeRecord,
   updateEmployeeRecord,
   changeEmployeeStatusRecord,
+  deleteEmployeeRecord,
   getMyEmployeeRecord,
 };

@@ -111,8 +111,9 @@ export const attendanceApi = {
   },
 
   // Policies
-  async listPolicies(): Promise<AttendancePolicy[]> {
-    const res = await apiClient<{ data: AttendancePolicy[] } | AttendancePolicy[]>('/attendance-policies');
+  async listPolicies(params?: { is_active?: string | boolean }): Promise<AttendancePolicy[]> {
+    const qs = params?.is_active !== undefined ? `?is_active=${params.is_active}` : '';
+    const res = await apiClient<{ data: AttendancePolicy[] } | AttendancePolicy[]>(`/attendance-policies${qs}`);
     if (Array.isArray(res)) return res;
     if (res && 'data' in res && Array.isArray(res.data)) return res.data;
     return [];

@@ -42,7 +42,18 @@ async function updateCompany(companyId, payload) {
   return result.rows[0] || null;
 }
 
-async function listDepartments(companyId) {
+async function listDepartments(companyId, filters = {}) {
+  const where = ["d.company_id = $1"];
+  const values = [companyId];
+
+  if (filters.is_active !== undefined && filters.is_active !== "all" && filters.is_active !== "any") {
+    const isActive = filters.is_active === true || filters.is_active === "true";
+    where.push(`d.is_active = $${values.length + 1}`);
+    values.push(isActive);
+  } else if (filters.is_active === undefined) {
+    where.push(`d.is_active = TRUE`);
+  }
+
   const result = await query(
     `
       SELECT
@@ -59,10 +70,10 @@ async function listDepartments(companyId) {
       FROM departments d
       LEFT JOIN departments parent ON parent.department_id = d.parent_department_id
       LEFT JOIN employees m ON m.employee_id = d.manager_id
-      WHERE d.company_id = $1
+      WHERE ${where.join(" AND ")}
       ORDER BY d.created_at DESC
     `,
-    [companyId]
+    values
   );
 
   return result.rows;
@@ -155,7 +166,26 @@ async function setDepartmentActive(companyId, departmentId, isActive) {
   return result.rows[0] || null;
 }
 
-async function listPositions(companyId) {
+async function hardDeleteDepartment(companyId, departmentId) {
+  const result = await query(
+    `DELETE FROM departments WHERE company_id = $1 AND department_id = $2 RETURNING department_id`,
+    [companyId, departmentId]
+  );
+  return result.rows[0] || null;
+}
+
+async function listPositions(companyId, filters = {}) {
+  const where = ["p.company_id = $1"];
+  const values = [companyId];
+
+  if (filters.is_active !== undefined && filters.is_active !== "all" && filters.is_active !== "any") {
+    const isActive = filters.is_active === true || filters.is_active === "true";
+    where.push(`p.is_active = $${values.length + 1}`);
+    values.push(isActive);
+  } else if (filters.is_active === undefined) {
+    where.push(`p.is_active = TRUE`);
+  }
+
   const result = await query(
     `
       SELECT
@@ -169,10 +199,10 @@ async function listPositions(companyId) {
         p.updated_at
       FROM positions p
       LEFT JOIN departments d ON d.department_id = p.department_id
-      WHERE p.company_id = $1
+      WHERE ${where.join(" AND ")}
       ORDER BY p.created_at DESC
     `,
-    [companyId]
+    values
   );
 
   return result.rows;
@@ -256,15 +286,34 @@ async function setPositionActive(companyId, positionId, isActive) {
   return result.rows[0] || null;
 }
 
-async function listEmployeeTypes(companyId) {
+async function hardDeletePosition(companyId, positionId) {
+  const result = await query(
+    `DELETE FROM positions WHERE company_id = $1 AND position_id = $2 RETURNING position_id`,
+    [companyId, positionId]
+  );
+  return result.rows[0] || null;
+}
+
+async function listEmployeeTypes(companyId, filters = {}) {
+  const where = ["company_id = $1"];
+  const values = [companyId];
+
+  if (filters.is_active !== undefined && filters.is_active !== "all" && filters.is_active !== "any") {
+    const isActive = filters.is_active === true || filters.is_active === "true";
+    where.push(`is_active = $${values.length + 1}`);
+    values.push(isActive);
+  } else if (filters.is_active === undefined) {
+    where.push(`is_active = TRUE`);
+  }
+
   const result = await query(
     `
       SELECT employee_type_id, company_id, name, is_active, created_at, updated_at
       FROM employee_types
-      WHERE company_id = $1
+      WHERE ${where.join(" AND ")}
       ORDER BY created_at DESC
     `,
-    [companyId]
+    values
   );
 
   return result.rows;
@@ -339,6 +388,14 @@ async function setEmployeeTypeActive(companyId, employeeTypeId, isActive) {
   return result.rows[0] || null;
 }
 
+async function hardDeleteEmployeeType(companyId, employeeTypeId) {
+  const result = await query(
+    `DELETE FROM employee_types WHERE company_id = $1 AND employee_type_id = $2 RETURNING employee_type_id`,
+    [companyId, employeeTypeId]
+  );
+  return result.rows[0] || null;
+}
+
 async function getEmployeeById(companyId, employeeId) {
   const result = await query(
     `
@@ -386,7 +443,7 @@ async function getEmployeeById(companyId, employeeId) {
   return result.rows[0] || null;
 }
 
-async function listEmployees(companyId, filters, pagination, sort) {
+async function listEmployees(companyId, filters = {}, pagination, sort) {
   const where = ["e.company_id = $1"];
   const values = [companyId];
   let index = 2;
@@ -403,7 +460,6 @@ async function listEmployees(companyId, filters, pagination, sort) {
     department_id: "e.department_id",
     position_id: "e.position_id",
     employee_type_id: "e.employee_type_id",
-    status: "e.status",
     manager_id: "e.manager_id",
     employee_id: "e.employee_id",
   };
@@ -414,6 +470,14 @@ async function listEmployees(companyId, filters, pagination, sort) {
       values.push(filters[key]);
       index += 1;
     }
+  }
+
+  if (filters.status && filters.status !== "ALL" && filters.status !== "any" && filters.status !== "all") {
+    where.push(`e.status = $${index}`);
+    values.push(filters.status);
+    index += 1;
+  } else if (!filters.status) {
+    where.push(`e.status = 'ACTIVE'`);
   }
 
   const offset = (pagination.page - 1) * pagination.limit;
@@ -472,6 +536,14 @@ async function listEmployees(companyId, filters, pagination, sort) {
     rows: result.rows,
     total: countResult.rows[0].total,
   };
+}
+
+async function hardDeleteEmployee(companyId, employeeId) {
+  const result = await query(
+    `DELETE FROM employees WHERE company_id = $1 AND employee_id = $2 RETURNING employee_id`,
+    [companyId, employeeId]
+  );
+  return result.rows[0] || null;
 }
 
 async function createEmployee(companyId, payload) {
@@ -606,21 +678,25 @@ module.exports = {
   createDepartment,
   updateDepartment,
   setDepartmentActive,
+  hardDeleteDepartment,
   listPositions,
   getPositionById,
   createPosition,
   updatePosition,
   setPositionActive,
+  hardDeletePosition,
   listEmployeeTypes,
   getEmployeeTypeById,
   createEmployeeType,
   updateEmployeeType,
   setEmployeeTypeActive,
+  hardDeleteEmployeeType,
   getEmployeeById,
   listEmployees,
   createEmployee,
   updateEmployee,
   updateEmployeeStatus,
+  hardDeleteEmployee,
   findEmployeeById,
   listManagerChain,
   withTransaction,
