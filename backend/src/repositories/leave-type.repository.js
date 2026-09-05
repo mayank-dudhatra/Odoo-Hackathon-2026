@@ -1,5 +1,9 @@
 const { query: defaultQuery } = require("../db");
 
+function getDb(executor) {
+  return (executor && executor.query) ? executor : defaultQuery;
+}
+
 async function createLeaveType(executor = defaultQuery, {
   company_id,
   name,
@@ -11,7 +15,7 @@ async function createLeaveType(executor = defaultQuery, {
   payroll_integration = true,
   is_active = true,
 }) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       INSERT INTO leave_types (
@@ -44,7 +48,7 @@ async function createLeaveType(executor = defaultQuery, {
 }
 
 async function findLeaveTypeById(executor = defaultQuery, companyId, leaveTypeId) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       SELECT *
@@ -58,7 +62,7 @@ async function findLeaveTypeById(executor = defaultQuery, companyId, leaveTypeId
 }
 
 async function findLeaveTypeByName(executor = defaultQuery, companyId, name) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       SELECT *
@@ -72,7 +76,7 @@ async function findLeaveTypeByName(executor = defaultQuery, companyId, name) {
 }
 
 async function listLeaveTypes(executor = defaultQuery, companyId, { is_active = null } = {}) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const params = [companyId];
   let sql = `SELECT * FROM leave_types WHERE company_id = $1`;
 
@@ -87,7 +91,7 @@ async function listLeaveTypes(executor = defaultQuery, companyId, { is_active = 
 }
 
 async function updateLeaveType(executor = defaultQuery, companyId, leaveTypeId, fields) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const allowed = [
     "name",
     "unit",
@@ -127,7 +131,7 @@ async function updateLeaveType(executor = defaultQuery, companyId, leaveTypeId, 
 }
 
 async function deactivateLeaveType(executor = defaultQuery, companyId, leaveTypeId) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       UPDATE leave_types

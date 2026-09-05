@@ -18,6 +18,10 @@ const {
 const router = express.Router();
 
 router.use(authenticate);
+router.use((req, res, next) => {
+  if (!req.user && req.auth) req.user = req.auth;
+  next();
+});
 
 // --- BULK GENERATION ---
 router.post(

@@ -58,6 +58,16 @@ function errorHandler(error, req, res, next) {
     });
   }
 
+  if (error && (error.name === "TokenExpiredError" || error.name === "JsonWebTokenError")) {
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: error.name === "TokenExpiredError" ? "TOKEN_EXPIRED" : "INVALID_TOKEN",
+        message: error.name === "TokenExpiredError" ? "Token has expired" : "Invalid token",
+      },
+    });
+  }
+
   console.error(error);
   return res.status(500).json({
     success: false,

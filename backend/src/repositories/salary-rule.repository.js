@@ -1,5 +1,9 @@
 const { query: defaultQuery } = require("../db");
 
+function getDb(executor) {
+  return (executor && executor.query) ? executor : defaultQuery;
+}
+
 async function createSalaryRule(executor = defaultQuery, {
   company_id,
   name,
@@ -12,7 +16,7 @@ async function createSalaryRule(executor = defaultQuery, {
   formula = null,
   is_active = true,
 }) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       INSERT INTO salary_rules (
@@ -47,7 +51,7 @@ async function createSalaryRule(executor = defaultQuery, {
 }
 
 async function findSalaryRuleById(executor = defaultQuery, companyId, ruleId) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       SELECT *
@@ -61,7 +65,7 @@ async function findSalaryRuleById(executor = defaultQuery, companyId, ruleId) {
 }
 
 async function findSalaryRuleByCode(executor = defaultQuery, companyId, code) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       SELECT *
@@ -79,7 +83,7 @@ async function listSalaryRules(executor = defaultQuery, companyId, {
   computation_type = null,
   is_active = null,
 } = {}) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const params = [companyId];
   let sql = `SELECT * FROM salary_rules WHERE company_id = $1`;
 
@@ -104,7 +108,7 @@ async function listSalaryRules(executor = defaultQuery, companyId, {
 }
 
 async function updateSalaryRule(executor = defaultQuery, companyId, ruleId, fields) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const allowed = [
     "name",
     "code",
@@ -149,7 +153,7 @@ async function updateSalaryRule(executor = defaultQuery, companyId, ruleId, fiel
 }
 
 async function deactivateSalaryRule(executor = defaultQuery, companyId, ruleId) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       UPDATE salary_rules

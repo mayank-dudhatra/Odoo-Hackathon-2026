@@ -1,5 +1,9 @@
 const { query: defaultQuery } = require("../db");
 
+function getDb(executor) {
+  return (executor && executor.query) ? executor : defaultQuery;
+}
+
 async function createAllocation(executor = defaultQuery, {
   company_id,
   employee_id,
@@ -11,7 +15,7 @@ async function createAllocation(executor = defaultQuery, {
   status = "APPROVED",
   approved_by = null,
 }) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       INSERT INTO leave_allocations (
@@ -46,7 +50,7 @@ async function createAllocation(executor = defaultQuery, {
 }
 
 async function findAllocationById(executor = defaultQuery, companyId, allocationId) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       SELECT
@@ -70,7 +74,7 @@ async function findAllocationById(executor = defaultQuery, companyId, allocation
 }
 
 async function findAllocationForUpdate(executor, companyId, allocationId) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       SELECT *
@@ -84,7 +88,7 @@ async function findAllocationForUpdate(executor, companyId, allocationId) {
 }
 
 async function findActiveAllocation(executor = defaultQuery, companyId, employeeId, leaveTypeId, year) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       SELECT *
@@ -107,7 +111,7 @@ async function listAllocations(executor = defaultQuery, companyId, {
   year = null,
   status = null,
 } = {}) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const params = [companyId];
   let sql = `
     SELECT
@@ -151,7 +155,7 @@ async function listAllocations(executor = defaultQuery, companyId, {
 }
 
 async function updateAllocationUsedDays(executor, allocationId, deltaDays) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       UPDATE leave_allocations
@@ -166,7 +170,7 @@ async function updateAllocationUsedDays(executor, allocationId, deltaDays) {
 }
 
 async function updateAllocationStatus(executor = defaultQuery, companyId, allocationId, status, approvedBy = null) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       UPDATE leave_allocations

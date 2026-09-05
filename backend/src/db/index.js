@@ -3,6 +3,7 @@ const { pool } = require("../../db/pool");
 async function query(text, params = []) {
   return pool.query(text, params);
 }
+query.query = query;
 
 async function withTransaction(callback) {
   const client = await pool.connect();

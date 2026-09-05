@@ -1,5 +1,9 @@
 const { query: defaultQuery } = require("../db");
 
+function getDb(executor) {
+  return (executor && executor.query) ? executor : defaultQuery;
+}
+
 async function createPayrun(executor = defaultQuery, {
   company_id,
   name,
@@ -9,7 +13,7 @@ async function createPayrun(executor = defaultQuery, {
   status = "DRAFT",
   created_by = null,
 }) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       INSERT INTO payruns (
@@ -38,7 +42,7 @@ async function createPayrun(executor = defaultQuery, {
 }
 
 async function findPayrunById(executor = defaultQuery, companyId, payrunId) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       SELECT
@@ -65,7 +69,7 @@ async function findPayrunById(executor = defaultQuery, companyId, payrunId) {
 }
 
 async function findPayrunForUpdate(executor, companyId, payrunId) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       SELECT *
@@ -84,7 +88,7 @@ async function listPayruns(executor = defaultQuery, companyId, {
   start_date = null,
   end_date = null,
 } = {}) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const params = [companyId];
   let sql = `
     SELECT
@@ -125,7 +129,7 @@ async function listPayruns(executor = defaultQuery, companyId, {
 }
 
 async function updatePayrunStatus(executor = defaultQuery, companyId, payrunId, status, actorUserId = null) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   let extraUpdate = "";
   const params = [status, companyId, payrunId];
 
@@ -151,7 +155,7 @@ async function updatePayrunStatus(executor = defaultQuery, companyId, payrunId, 
 }
 
 async function updatePayrunDetails(executor = defaultQuery, companyId, payrunId, fields) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const allowed = ["name", "salary_structure_id", "period_start", "period_end"];
   const setClauses = [];
   const params = [companyId, payrunId];
@@ -181,7 +185,7 @@ async function updatePayrunDetails(executor = defaultQuery, companyId, payrunId,
 }
 
 async function findOverlappingPayruns(executor = defaultQuery, companyId, structureId, periodStart, periodEnd, excludePayrunId = null) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const params = [companyId, structureId, periodStart, periodEnd];
   let sql = `
     SELECT payrun_id

@@ -17,7 +17,15 @@ async function authenticate(req, res, next) {
       throw new AppError(401, "Authentication required", "AUTH_REQUIRED");
     }
 
-    const payload = verifyAccessToken(token);
+    let payload;
+    try {
+      payload = verifyAccessToken(token);
+    } catch (err) {
+      if (err && err.name === "TokenExpiredError") {
+        throw new AppError(401, "Token has expired", "TOKEN_EXPIRED");
+      }
+      throw new AppError(401, "Invalid authentication token", "INVALID_TOKEN");
+    }
 
     const result = await query(
       `
@@ -57,6 +65,7 @@ async function authenticate(req, res, next) {
       session_id: user.session_id,
       token_payload: payload,
     };
+    req.user = req.auth;
 
     // If user must change password, restrict access to non-auth routes
     if (req.auth.must_change_password) {

@@ -1,7 +1,11 @@
 const { query: defaultQuery } = require("../db");
 
+function getDb(executor) {
+  return (executor && executor.query) ? executor : defaultQuery;
+}
+
 async function addRuleToStructure(executor = defaultQuery, structureId, ruleId, sequence, is_active = true) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       INSERT INTO salary_structure_rules (
@@ -21,7 +25,7 @@ async function addRuleToStructure(executor = defaultQuery, structureId, ruleId, 
 }
 
 async function findStructureRule(executor = defaultQuery, structureId, ruleId) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       SELECT *
@@ -35,7 +39,7 @@ async function findStructureRule(executor = defaultQuery, structureId, ruleId) {
 }
 
 async function updateStructureRule(executor = defaultQuery, structureId, ruleId, fields) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const setClauses = [];
   const params = [structureId, ruleId];
 
@@ -67,7 +71,7 @@ async function updateStructureRule(executor = defaultQuery, structureId, ruleId,
 }
 
 async function removeRuleFromStructure(executor = defaultQuery, structureId, ruleId) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       DELETE FROM salary_structure_rules
@@ -80,7 +84,7 @@ async function removeRuleFromStructure(executor = defaultQuery, structureId, rul
 }
 
 async function getStructureRules(executor = defaultQuery, companyId, structureId, { onlyActive = true } = {}) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const params = [companyId, structureId];
   let sql = `
     SELECT

@@ -1,5 +1,9 @@
 const { query: defaultQuery } = require("../db");
 
+function getDb(executor) {
+  return (executor && executor.query) ? executor : defaultQuery;
+}
+
 async function createLeaveRequest(executor = defaultQuery, {
   company_id,
   employee_id,
@@ -10,7 +14,7 @@ async function createLeaveRequest(executor = defaultQuery, {
   reason = null,
   status = "PENDING",
 }) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       INSERT INTO leave_requests (
@@ -41,7 +45,7 @@ async function createLeaveRequest(executor = defaultQuery, {
 }
 
 async function findLeaveRequestById(executor = defaultQuery, companyId, requestId) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       SELECT
@@ -67,7 +71,7 @@ async function findLeaveRequestById(executor = defaultQuery, companyId, requestI
 }
 
 async function findLeaveRequestForUpdate(executor, companyId, requestId) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       SELECT
@@ -94,7 +98,7 @@ async function listLeaveRequests(executor = defaultQuery, companyId, {
   start_date = null,
   end_date = null,
 } = {}) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const params = [companyId];
   let sql = `
     SELECT
@@ -143,7 +147,7 @@ async function listLeaveRequests(executor = defaultQuery, companyId, {
 }
 
 async function updateLeaveRequestStatus(executor = defaultQuery, companyId, requestId, status, approvedBy = null) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       UPDATE leave_requests
@@ -160,7 +164,7 @@ async function updateLeaveRequestStatus(executor = defaultQuery, companyId, requ
 }
 
 async function checkOverlappingLeaveRequest(executor = defaultQuery, companyId, employeeId, startDate, endDate, excludeRequestId = null) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const params = [companyId, employeeId, startDate, endDate];
   let sql = `
     SELECT leave_request_id
@@ -182,7 +186,7 @@ async function checkOverlappingLeaveRequest(executor = defaultQuery, companyId, 
 }
 
 async function getApprovedLeavesForPayroll(executor = defaultQuery, companyId, periodStart, periodEnd, employeeId = null) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const params = [companyId, periodStart, periodEnd];
   let sql = `
     SELECT

@@ -1,5 +1,9 @@
 const { query: defaultQuery } = require("../db");
 
+function getDb(executor) {
+  return (executor && executor.query) ? executor : defaultQuery;
+}
+
 async function createSalaryStructure(executor = defaultQuery, {
   company_id,
   name,
@@ -7,7 +11,7 @@ async function createSalaryStructure(executor = defaultQuery, {
   is_active = true,
   created_by = null,
 }) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       INSERT INTO salary_structures (
@@ -26,7 +30,7 @@ async function createSalaryStructure(executor = defaultQuery, {
 }
 
 async function findSalaryStructureById(executor = defaultQuery, companyId, structureId) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       SELECT *
@@ -40,7 +44,7 @@ async function findSalaryStructureById(executor = defaultQuery, companyId, struc
 }
 
 async function findSalaryStructureByName(executor = defaultQuery, companyId, name) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       SELECT *
@@ -54,7 +58,7 @@ async function findSalaryStructureByName(executor = defaultQuery, companyId, nam
 }
 
 async function listSalaryStructures(executor = defaultQuery, companyId, { is_active = null } = {}) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const params = [companyId];
   let sql = `SELECT * FROM salary_structures WHERE company_id = $1`;
 
@@ -69,7 +73,7 @@ async function listSalaryStructures(executor = defaultQuery, companyId, { is_act
 }
 
 async function updateSalaryStructure(executor = defaultQuery, companyId, structureId, fields) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const allowed = ["name", "description", "is_active"];
   const setClauses = [];
   const params = [companyId, structureId];
@@ -99,7 +103,7 @@ async function updateSalaryStructure(executor = defaultQuery, companyId, structu
 }
 
 async function deactivateSalaryStructure(executor = defaultQuery, companyId, structureId) {
-  const db = executor.query ? executor : defaultQuery;
+  const db = getDb(executor);
   const result = await db.query(
     `
       UPDATE salary_structures
