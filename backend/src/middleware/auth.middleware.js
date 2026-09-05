@@ -21,7 +21,7 @@ async function authenticate(req, res, next) {
 
     const result = await query(
       `
-        SELECT u.user_id, u.company_id, u.employee_id, u.role_id, r.role_name, u.status,
+        SELECT u.user_id, u.company_id, u.employee_id, u.role_id, r.role_name, u.status, u.must_change_password,
                s.session_id, s.revoked_at, s.expires_at
         FROM users u
         JOIN roles r ON r.role_id = u.role_id
@@ -53,9 +53,29 @@ async function authenticate(req, res, next) {
       employee_id: user.employee_id,
       role_id: user.role_id,
       role_name: user.role_name,
+      must_change_password: Boolean(user.must_change_password),
       session_id: user.session_id,
       token_payload: payload,
     };
+
+    // If user must change password, restrict access to non-auth routes
+    if (req.auth.must_change_password) {
+      const allowedPaths = [
+        "/api/auth/change-password",
+        "/api/auth/password",
+        "/api/auth/me",
+        "/api/auth/logout",
+        "/api/auth/logout-all",
+      ];
+      const currentPath = req.originalUrl.split("?")[0];
+      if (!allowedPaths.includes(currentPath)) {
+        throw new AppError(
+          403,
+          "You must change your temporary password before accessing dashboard features",
+          "MUST_CHANGE_PASSWORD"
+        );
+      }
+    }
 
     next();
   } catch (error) {

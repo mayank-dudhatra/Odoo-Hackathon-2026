@@ -13,6 +13,15 @@ const env = {
   invitationTtlHours: parseIntOrDefault(process.env.INVITATION_TTL_HOURS, 48),
   bcryptRounds: parseIntOrDefault(process.env.BCRYPT_ROUNDS, 12),
   frontendBaseUrl: process.env.FRONTEND_BASE_URL || "http://localhost:5173",
+  smtp: {
+    host: process.env.SMTP_HOST || (process.env.EMAIL_USER ? "smtp.gmail.com" : ""),
+    port: parseIntOrDefault(process.env.SMTP_PORT, 587),
+    user: process.env.SMTP_USER || process.env.EMAIL_USER || "",
+    password: process.env.SMTP_PASSWORD || process.env.EMAIL_PASS || "",
+    from: process.env.SMTP_FROM || process.env.SMTP_USER || process.env.EMAIL_USER || "no-reply@peoplepay360.com",
+  },
+  passwordResetUrl: process.env.PASSWORD_RESET_URL || `${process.env.FRONTEND_BASE_URL || "http://localhost:5173"}/reset-password`,
+  passwordResetTtlMinutes: parseIntOrDefault(process.env.PASSWORD_RESET_TTL_MINUTES, 30),
 };
 
 if (!env.accessTokenSecret || !env.refreshTokenSecret) {
@@ -22,3 +31,4 @@ if (!env.accessTokenSecret || !env.refreshTokenSecret) {
 }
 
 module.exports = { env };
+

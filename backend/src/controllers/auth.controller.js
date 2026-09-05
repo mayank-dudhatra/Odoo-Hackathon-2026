@@ -9,6 +9,8 @@ const {
   createInvitationForUser,
   resendInvitation,
   getCurrentUserProfile,
+  requestPasswordReset,
+  resetPassword,
 } = require("../services/auth.service");
 const { success } = require("../utils/response");
 
@@ -92,6 +94,19 @@ async function resendUserInvitation(req, res) {
   return success(res, result, "Invitation resent");
 }
 
+async function forgotPassword(req, res) {
+  const result = await requestPasswordReset({ email: req.body.email });
+  return success(res, result, "Password reset request processed");
+}
+
+async function resetPasswordHandler(req, res) {
+  const result = await resetPassword({
+    token: req.body.token,
+    newPassword: req.body.new_password,
+  });
+  return success(res, result, "Password reset successful");
+}
+
 module.exports = {
   initialSetup,
   signIn,
@@ -103,4 +118,7 @@ module.exports = {
   me,
   inviteUser,
   resendUserInvitation,
+  forgotPassword,
+  resetPasswordHandler,
 };
+

@@ -140,6 +140,9 @@ CREATE TABLE IF NOT EXISTS users (
   status VARCHAR(20) NOT NULL DEFAULT 'INVITED',
   invitation_token_hash TEXT,
   invitation_expires_at TIMESTAMP,
+  password_reset_token_hash TEXT,
+  password_reset_expires_at TIMESTAMP,
+  must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
   email_verified_at TIMESTAMP,
   last_login_at TIMESTAMP,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -150,6 +153,11 @@ CREATE TABLE IF NOT EXISTS users (
   CONSTRAINT uq_users_company_email UNIQUE (company_id, email),
   CONSTRAINT chk_users_status CHECK (status IN ('INVITED', 'ACTIVE', 'DISABLED'))
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE;
+
 
 CREATE TABLE IF NOT EXISTS user_sessions (
   session_id BIGSERIAL PRIMARY KEY,

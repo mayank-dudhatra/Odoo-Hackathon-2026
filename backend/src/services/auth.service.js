@@ -1,13 +1,15 @@
 const { query, withTransaction } = require("../db");
 const { AppError, sanitizeUser } = require("../utils/http");
-const { hashPassword, verifyPassword } = require("../utils/password");
+const { hashPassword, verifyPassword, generateTemporaryPassword } = require("../utils/password");
 const { generateRandomToken, hashToken } = require("../utils/crypto");
 const { signAccessToken, generateRefreshToken } = require("../utils/tokens");
 const { env } = require("../config/env");
 const { createAuditLog } = require("./audit.service");
 const { getRoleByName } = require("./rbac.service");
+const { sendPasswordResetEmail, sendUserInvitationEmail } = require("./email.service");
 
 function buildPublicUser(row) {
+  if (!row) return null;
   return sanitizeUser({
     user_id: row.user_id,
     company_id: row.company_id,
@@ -17,6 +19,7 @@ function buildPublicUser(row) {
     role_id: row.role_id,
     role_name: row.role_name,
     status: row.status,
+    must_change_password: Boolean(row.must_change_password),
     invitation_expires_at: row.invitation_expires_at,
     email_verified_at: row.email_verified_at,
     last_login_at: row.last_login_at,
@@ -27,29 +30,52 @@ function buildPublicUser(row) {
 
 async function setupInitialCompany(payload) {
   return withTransaction(async (client) => {
-    const existingCompanyCount = await client.query(
-      `SELECT COUNT(*)::int AS count FROM companies`
+    let companyId;
+    let companyObj;
+
+    const companyCheck = await client.query(
+      `SELECT company_id, name, email, timezone, currency_code, created_at
+       FROM companies
+       WHERE LOWER(name) = LOWER($1) OR (email IS NOT NULL AND LOWER(email) = LOWER($2))
+       LIMIT 1`,
+      [payload.company_name, payload.company_email || '']
     );
 
-    if (existingCompanyCount.rows[0].count > 0) {
-      throw new AppError(409, "Initial setup already completed", "SETUP_ALREADY_DONE");
+    if (companyCheck.rows.length > 0) {
+      companyObj = companyCheck.rows[0];
+      companyId = companyObj.company_id;
+
+      const adminRoleCheck = await client.query(
+        `SELECT role_id FROM roles WHERE role_name = 'Admin' LIMIT 1`
+      );
+      if (adminRoleCheck.rows.length > 0) {
+        const adminUserCheck = await client.query(
+          `SELECT user_id FROM users WHERE company_id = $1 AND role_id = $2 LIMIT 1`,
+          [companyId, adminRoleCheck.rows[0].role_id]
+        );
+        if (adminUserCheck.rows.length > 0) {
+          throw new AppError(409, "Initial Admin account already exists for this company", "ADMIN_ALREADY_EXISTS");
+        }
+      }
+    } else {
+      const companyResult = await client.query(
+        `
+          INSERT INTO companies (name, email, phone, address, timezone, currency_code, is_active)
+          VALUES ($1, $2, $3, $4, $5, $6, TRUE)
+          RETURNING company_id, name, email, timezone, currency_code, created_at
+        `,
+        [
+          payload.company_name,
+          payload.company_email || null,
+          payload.company_phone || null,
+          payload.company_address || null,
+          payload.timezone || 'UTC',
+          payload.currency_code || 'USD',
+        ]
+      );
+      companyObj = companyResult.rows[0];
+      companyId = companyObj.company_id;
     }
-
-    const companyResult = await client.query(
-      `
-        INSERT INTO companies (name, email, phone, address, timezone, currency_code, is_active)
-        VALUES ($1, $2, $3, $4, $5, $6, TRUE)
-        RETURNING company_id, name, email, timezone, currency_code, created_at
-      `,
-      [
-        payload.company_name,
-        payload.company_email || null,
-        payload.company_phone || null,
-        payload.company_address || null,
-        payload.timezone,
-        payload.currency_code,
-      ]
-    );
 
     const adminRole = await getRoleByName("Admin");
     if (!adminRole) {
@@ -67,13 +93,14 @@ async function setupInitialCompany(payload) {
           password_hash,
           role_id,
           status,
+          must_change_password,
           email_verified_at
         )
-        VALUES ($1, $2, $3, $4, $5, 'ACTIVE', NOW())
-        RETURNING user_id, company_id, employee_id, username, email, role_id, status, created_at, updated_at
+        VALUES ($1, $2, $3, $4, $5, 'ACTIVE', FALSE, NOW())
+        RETURNING user_id, company_id, employee_id, username, email, role_id, status, must_change_password, created_at, updated_at
       `,
       [
-        companyResult.rows[0].company_id,
+        companyId,
         payload.admin_username,
         payload.admin_email,
         passwordHash,
@@ -82,19 +109,20 @@ async function setupInitialCompany(payload) {
     );
 
     await createAuditLog({
-      companyId: companyResult.rows[0].company_id,
+      companyId: companyId,
       userId: userResult.rows[0].user_id,
       module: "AUTH",
-      action: "INITIAL_SETUP",
+      action: "INITIAL_ADMIN_CREATED",
       recordId: userResult.rows[0].user_id,
       details: {
-        company_name: companyResult.rows[0].name,
+        company_name: companyObj.name,
         admin_username: payload.admin_username,
+        admin_email: payload.admin_email,
       },
     });
 
     return {
-      company: companyResult.rows[0],
+      company: companyObj,
       admin: buildPublicUser({
         ...userResult.rows[0],
         role_name: "Admin",
@@ -116,6 +144,7 @@ async function login({ identifier, password, ipAddress, userAgent }) {
         u.role_id,
         r.role_name,
         u.status,
+        u.must_change_password,
         u.invitation_expires_at,
         u.email_verified_at,
         u.last_login_at,
@@ -210,6 +239,7 @@ async function login({ identifier, password, ipAddress, userAgent }) {
     role_id: user.role_id,
     role_name: user.role_name,
     sid: sessionResult.rows[0].session_id,
+    must_change_password: Boolean(user.must_change_password),
   });
 
   await createAuditLog({
@@ -225,6 +255,7 @@ async function login({ identifier, password, ipAddress, userAgent }) {
     access_token: accessToken,
     refresh_token: refreshToken,
     refresh_expires_at: sessionResult.rows[0].expires_at,
+    must_change_password: Boolean(user.must_change_password),
     user: buildPublicUser(user),
   };
 }
@@ -406,7 +437,7 @@ async function activateInvitation({ token, password }) {
 async function changePassword({ userId, companyId, currentPassword, newPassword }) {
   const result = await query(
     `
-      SELECT user_id, password_hash
+      SELECT user_id, password_hash, must_change_password
       FROM users
       WHERE user_id = $1 AND company_id = $2
       LIMIT 1
@@ -422,12 +453,24 @@ async function changePassword({ userId, companyId, currentPassword, newPassword 
 
   const isMatch = await verifyPassword(currentPassword, user.password_hash);
   if (!isMatch) {
-    throw new AppError(401, "Invalid credentials", "INVALID_CREDENTIALS");
+    throw new AppError(401, "Invalid current password", "INVALID_CREDENTIALS");
   }
 
+  if (currentPassword === newPassword) {
+    throw new AppError(400, "New password must be different from current password", "SAME_PASSWORD");
+  }
+
+  const isFirstPasswordChange = Boolean(user.must_change_password);
   const newHash = await hashPassword(newPassword);
+
   await query(
-    `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE user_id = $2`,
+    `
+      UPDATE users
+      SET password_hash = $1,
+          must_change_password = FALSE,
+          updated_at = NOW()
+      WHERE user_id = $2
+    `,
     [newHash, userId]
   );
 
@@ -444,9 +487,15 @@ async function changePassword({ userId, companyId, currentPassword, newPassword 
     companyId,
     userId,
     module: "AUTH",
-    action: "PASSWORD_CHANGED",
+    action: isFirstPasswordChange ? "FIRST_PASSWORD_CHANGED" : "PASSWORD_CHANGED",
     recordId: userId,
   });
+
+  return {
+    password_changed: true,
+    must_change_password: false,
+    message: "Password changed successfully. Please log in again with your new password.",
+  };
 }
 
 async function createInvitationForUser({ actor, payload }) {
@@ -455,8 +504,21 @@ async function createInvitationForUser({ actor, payload }) {
     throw new AppError(400, "Invalid role", "INVALID_ROLE");
   }
 
-  const invitationToken = generateRandomToken(64);
-  const invitationTokenHash = hashToken(invitationToken);
+  const duplicateCheck = await query(
+    `
+      SELECT user_id FROM users
+      WHERE company_id = $1 AND (LOWER(username) = LOWER($2) OR LOWER(email) = LOWER($3))
+      LIMIT 1
+    `,
+    [actor.company_id, payload.username, payload.email]
+  );
+
+  if (duplicateCheck.rows.length > 0) {
+    throw new AppError(409, "User with this username or email already exists for this company", "DUPLICATE_USER");
+  }
+
+  const tempPassword = generateTemporaryPassword(12);
+  const passwordHash = await hashPassword(tempPassword);
 
   const result = await query(
     `
@@ -468,39 +530,72 @@ async function createInvitationForUser({ actor, payload }) {
         password_hash,
         role_id,
         status,
-        invitation_token_hash,
-        invitation_expires_at
+        must_change_password,
+        email_verified_at
       )
       VALUES (
         $1,
         $2,
         $3,
         $4,
-        NULL,
         $5,
-        'INVITED',
         $6,
-        NOW() + ($7::int * INTERVAL '1 hour')
+        'ACTIVE',
+        TRUE,
+        NOW()
       )
-      RETURNING user_id, company_id, employee_id, username, email, role_id, status, invitation_expires_at, created_at, updated_at
+      RETURNING user_id, company_id, employee_id, username, email, role_id, status, must_change_password, created_at, updated_at
     `,
     [
       actor.company_id,
       payload.employee_id || null,
       payload.username,
       payload.email,
+      passwordHash,
       role.role_id,
-      invitationTokenHash,
-      env.invitationTtlHours,
     ]
   );
+
+  const newUser = result.rows[0];
+
+  const companyResult = await query(
+    `SELECT name FROM companies WHERE company_id = $1 LIMIT 1`,
+    [actor.company_id]
+  );
+  const companyName = companyResult.rows[0]?.name || "PeoplePay360";
+
+  try {
+    await sendUserInvitationEmail({
+      to: newUser.email,
+      userName: newUser.username,
+      emailOrUsername: newUser.email,
+      tempPassword,
+      loginUrl: `${env.frontendBaseUrl.replace(/\/$/, "")}/login`,
+      companyName,
+    });
+  } catch (err) {
+    console.error("[AuthService] Failed to send user invitation email:", err.message);
+  }
+
+  await createAuditLog({
+    companyId: actor.company_id,
+    userId: actor.user_id,
+    module: "AUTH",
+    action: "USER_CREATED",
+    recordId: newUser.user_id,
+    details: {
+      invited_user_email: payload.email,
+      role_name: payload.role_name,
+      must_change_password: true,
+    },
+  });
 
   await createAuditLog({
     companyId: actor.company_id,
     userId: actor.user_id,
     module: "AUTH",
     action: "INVITATION_SENT",
-    recordId: result.rows[0].user_id,
+    recordId: newUser.user_id,
     details: {
       invited_user_email: payload.email,
       role_name: payload.role_name,
@@ -509,17 +604,10 @@ async function createInvitationForUser({ actor, payload }) {
 
   return {
     user: buildPublicUser({
-      ...result.rows[0],
+      ...newUser,
       role_name: role.role_name,
     }),
-    invitation: {
-      expires_at: result.rows[0].invitation_expires_at,
-      activation_token: env.nodeEnv === "production" ? undefined : invitationToken,
-      activation_url:
-        env.nodeEnv === "production"
-          ? undefined
-          : `${env.frontendBaseUrl.replace(/\/$/, "")}/activate?token=${invitationToken}`,
-    },
+    message: "User created successfully. Invitation email sent with temporary password.",
   };
 }
 
@@ -607,6 +695,134 @@ async function getCurrentUserProfile(userId, companyId) {
   return buildPublicUser(result.rows[0] || null);
 }
 
+const { sendPasswordResetEmail } = require("./email.service");
+
+async function requestPasswordReset({ email }) {
+  const genericResponse = {
+    message: "If an account with that email exists, a password reset link has been sent.",
+  };
+
+  if (!email) {
+    return genericResponse;
+  }
+
+  const result = await query(
+    `
+      SELECT user_id, company_id, username, email, status
+      FROM users
+      WHERE LOWER(email) = LOWER($1)
+      LIMIT 1
+    `,
+    [email.trim()]
+  );
+
+  const user = result.rows[0];
+
+  if (!user || user.status === "DISABLED") {
+    return genericResponse;
+  }
+
+  const resetToken = generateRandomToken(64);
+  const resetTokenHash = hashToken(resetToken);
+
+  await query(
+    `
+      UPDATE users
+      SET password_reset_token_hash = $1,
+          password_reset_expires_at = NOW() + ($2::int * INTERVAL '1 minute'),
+          updated_at = NOW()
+      WHERE user_id = $3
+    `,
+    [resetTokenHash, env.passwordResetTtlMinutes, user.user_id]
+  );
+
+  const resetUrl = `${env.passwordResetUrl.replace(/\/$/, "")}?token=${resetToken}`;
+
+  try {
+    await sendPasswordResetEmail({
+      to: user.email,
+      resetUrl,
+      userName: user.username,
+    });
+  } catch (err) {
+    console.error("[AuthService] Failed to send password reset email:", err.message);
+  }
+
+  await createAuditLog({
+    companyId: user.company_id,
+    userId: user.user_id,
+    module: "AUTH",
+    action: "FORGOT_PASSWORD_REQUESTED",
+    recordId: user.user_id,
+    details: { email_domain: user.email.split("@")[1] || null },
+  });
+
+  return genericResponse;
+}
+
+async function resetPassword({ token, newPassword }) {
+  const tokenHash = hashToken(token);
+
+  const result = await query(
+    `
+      SELECT user_id, company_id, username, email, status, password_reset_expires_at
+      FROM users
+      WHERE password_reset_token_hash = $1
+      LIMIT 1
+    `,
+    [tokenHash]
+  );
+
+  const user = result.rows[0];
+
+  if (!user) {
+    throw new AppError(400, "Invalid or expired password reset token", "INVALID_RESET_TOKEN");
+  }
+
+  if (user.status === "DISABLED") {
+    throw new AppError(403, "Account disabled", "ACCOUNT_DISABLED");
+  }
+
+  if (!user.password_reset_expires_at || new Date(user.password_reset_expires_at) <= new Date()) {
+    throw new AppError(400, "Password reset token has expired", "RESET_TOKEN_EXPIRED");
+  }
+
+  const newHash = await hashPassword(newPassword);
+
+  await query(
+    `
+      UPDATE users
+      SET password_hash = $1,
+          password_reset_token_hash = NULL,
+          password_reset_expires_at = NULL,
+          must_change_password = FALSE,
+          updated_at = NOW()
+      WHERE user_id = $2
+    `,
+    [newHash, user.user_id]
+  );
+
+  // Invalidate all active sessions for this user
+  await query(
+    `
+      UPDATE user_sessions
+      SET revoked_at = NOW(), updated_at = NOW()
+      WHERE user_id = $1 AND revoked_at IS NULL
+    `,
+    [user.user_id]
+  );
+
+  await createAuditLog({
+    companyId: user.company_id,
+    userId: user.user_id,
+    module: "AUTH",
+    action: "PASSWORD_RESET_COMPLETED",
+    recordId: user.user_id,
+  });
+
+  return { password_reset: true };
+}
+
 module.exports = {
   setupInitialCompany,
   login,
@@ -618,4 +834,7 @@ module.exports = {
   createInvitationForUser,
   resendInvitation,
   getCurrentUserProfile,
+  requestPasswordReset,
+  resetPassword,
 };
+
