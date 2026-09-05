@@ -670,9 +670,19 @@ CREATE TABLE IF NOT EXISTS payruns (
   CONSTRAINT fk_payruns_created_by FOREIGN KEY (created_by) REFERENCES users(user_id) ON DELETE SET NULL,
   CONSTRAINT fk_payruns_validated_by FOREIGN KEY (validated_by) REFERENCES users(user_id) ON DELETE SET NULL,
   CONSTRAINT fk_payruns_paid_by FOREIGN KEY (paid_by) REFERENCES users(user_id) ON DELETE SET NULL,
-  CONSTRAINT chk_payruns_status CHECK (status IN ('DRAFT', 'PROCESSING', 'VALIDATED', 'PAID', 'CANCELLED')),
+  CONSTRAINT chk_payruns_status CHECK (status IN ('DRAFT', 'PROCESSING', 'COMPUTED', 'VALIDATED', 'PAID', 'CANCELLED')),
   CONSTRAINT chk_payruns_period CHECK (period_end >= period_start)
 );
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'uq_payruns_company_period_structure'
+  ) THEN
+    ALTER TABLE payruns
+      ADD CONSTRAINT uq_payruns_company_period_structure UNIQUE (company_id, salary_structure_id, period_start, period_end);
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS payrun_employees (
   payrun_employee_id SERIAL PRIMARY KEY,
@@ -737,7 +747,7 @@ CREATE TABLE IF NOT EXISTS payslip_lines (
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
   CONSTRAINT fk_payslip_lines_payslip FOREIGN KEY (payslip_id) REFERENCES payslips(payslip_id) ON DELETE CASCADE,
   CONSTRAINT fk_payslip_lines_salary_rule FOREIGN KEY (salary_rule_id) REFERENCES salary_rules(salary_rule_id) ON DELETE SET NULL,
-  CONSTRAINT chk_payslip_lines_category CHECK (category IN ('BASIC', 'ALLOWANCE', 'GROSS', 'DEDUCTION', 'TAX', 'NET', 'REIMBURSEMENT'))
+  CONSTRAINT chk_payslip_lines_category CHECK (category IN ('BASIC', 'ALLOWANCE', 'GROSS', 'DEDUCTION', 'TAX', 'CONTRIBUTION', 'NET', 'REIMBURSEMENT'))
 );
 
 CREATE TABLE IF NOT EXISTS audit_logs (
