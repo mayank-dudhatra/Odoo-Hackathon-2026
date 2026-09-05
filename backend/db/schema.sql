@@ -802,6 +802,11 @@ CREATE INDEX IF NOT EXISTS idx_leave_requests_company_status ON leave_requests(c
 CREATE INDEX IF NOT EXISTS idx_payruns_company_period ON payruns(company_id, period_start, period_end);
 CREATE INDEX IF NOT EXISTS idx_payslips_company_payrun ON payslips(company_id, payrun_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_company_module ON audit_logs(company_id, module, created_at);
+CREATE INDEX IF NOT EXISTS idx_employees_company_dept ON employees(company_id, department_id, status);
+CREATE INDEX IF NOT EXISTS idx_employees_company_type ON employees(company_id, employee_type_id, status);
+CREATE INDEX IF NOT EXISTS idx_payslips_company_dates ON payslips(company_id, period_start, period_end, status);
+CREATE INDEX IF NOT EXISTS idx_leave_requests_company_dates ON leave_requests(company_id, start_date, end_date, status);
+CREATE INDEX IF NOT EXISTS idx_contracts_company_status ON contracts(company_id, status, end_date);
 
 INSERT INTO companies (name, email, phone, address, timezone, currency_code, is_active)
 VALUES (

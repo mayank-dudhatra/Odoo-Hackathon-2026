@@ -11,6 +11,8 @@ const leaveRoutes = require("./leave.routes");
 const salaryRoutes = require("./salary.routes");
 const payrunRoutes = require("./payrun.routes");
 const payslipRoutes = require("./payslip.routes");
+const dashboardRoutes = require("./dashboard.routes");
+const reportRoutes = require("./report.routes");
 
 const router = express.Router();
 
@@ -26,6 +28,8 @@ router.use("/", leaveRoutes);
 router.use("/", salaryRoutes);
 router.use("/", payrunRoutes);
 router.use("/", payslipRoutes);
+router.use("/dashboard", dashboardRoutes);
+router.use("/reports", reportRoutes);
 
 module.exports = router;
 
