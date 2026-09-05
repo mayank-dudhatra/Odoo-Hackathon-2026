@@ -5,8 +5,46 @@ import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Eye, EyeOff, Lock, Mail, AlertCircle } from 'lucide-react';
 
+function getRoleHomePath(roleName?: string | null): string {
+  if (!roleName) return '/employees';
+  if (roleName === 'Admin') return '/users';
+  if (roleName === 'HR Manager') return '/employees';
+  if (roleName === 'Payroll Manager' || roleName === 'Payroll User') return '/payroll/payruns';
+  if (roleName === 'Employee') return '/time-off';
+  return '/employees';
+}
+
+function getSafeDestination(fromPath: string | undefined, roleName?: string | null): string {
+  const home = getRoleHomePath(roleName);
+  if (!fromPath || fromPath === '/forbidden' || fromPath === '/login' || fromPath === '/') {
+    return home;
+  }
+  if (roleName === 'Employee') {
+    if (
+      fromPath.startsWith('/employees') ||
+      fromPath.startsWith('/users') ||
+      fromPath.startsWith('/roles') ||
+      fromPath.startsWith('/permissions') ||
+      fromPath.startsWith('/departments') ||
+      fromPath.startsWith('/positions') ||
+      fromPath.startsWith('/contracts') ||
+      fromPath.startsWith('/working-schedules') ||
+      fromPath.startsWith('/payroll')
+    ) {
+      return home;
+    }
+  }
+  if (
+    roleName !== 'Admin' &&
+    (fromPath.startsWith('/users') || fromPath.startsWith('/roles') || fromPath.startsWith('/permissions'))
+  ) {
+    return home;
+  }
+  return fromPath;
+}
+
 export const LoginPage: React.FC = () => {
-  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { login, isAuthenticated, isLoading: authLoading, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -19,7 +57,8 @@ export const LoginPage: React.FC = () => {
 
   // If already authenticated, redirect to destination
   if (isAuthenticated && !authLoading) {
-    const destination = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/users';
+    const fromPath = (location.state as { from?: { pathname?: string } })?.from?.pathname;
+    const destination = getSafeDestination(fromPath, user?.role_name);
     return <Navigate to={destination} replace />;
   }
 
@@ -47,13 +86,14 @@ export const LoginPage: React.FC = () => {
     setErrors({});
 
     try {
-      await login({
+      const loggedInUser = await login({
         identifier: identifier.trim(),
         password,
         remember_me: rememberMe,
       });
 
-      const destination = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/users';
+      const fromPath = (location.state as { from?: { pathname?: string } })?.from?.pathname;
+      const destination = getSafeDestination(fromPath, loggedInUser?.role_name || user?.role_name);
       navigate(destination, { replace: true });
     } catch (err: unknown) {
       const errorObj = err as { message?: string; code?: string };

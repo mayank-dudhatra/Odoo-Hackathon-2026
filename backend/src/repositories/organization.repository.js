@@ -405,6 +405,7 @@ async function listEmployees(companyId, filters, pagination, sort) {
     employee_type_id: "e.employee_type_id",
     status: "e.status",
     manager_id: "e.manager_id",
+    employee_id: "e.employee_id",
   };
 
   for (const [key, column] of Object.entries(filterMap)) {

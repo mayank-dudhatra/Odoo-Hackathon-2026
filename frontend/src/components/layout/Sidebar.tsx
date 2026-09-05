@@ -8,6 +8,16 @@ import {
   Shield,
   KeyRound,
   UserCheck,
+  FileText,
+  Clock,
+  CalendarCheck,
+  Calendar,
+  Sliders,
+  Calculator,
+  DollarSign,
+  History,
+  Receipt,
+  ShieldCheck,
   X,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -18,15 +28,23 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
-  const { checkPermission, role } = useAuth();
+  const { checkPermission, role, user } = useAuth();
   const isAdmin = role === 'Admin';
+  const hasEmployeeProfile = Boolean(user?.employee_id);
 
+  // 1. Organization & HR
   const employeeNavItems = [
     {
       name: 'All Employees',
       path: '/employees',
       icon: <UserCheck className="w-[18px] h-[18px]" />,
-      visible: isAdmin || checkPermission('EMPLOYEES', 'READ'),
+      visible: isAdmin || (role !== 'Employee' && checkPermission('EMPLOYEES', 'READ')),
+    },
+    {
+      name: 'My Profile',
+      path: user?.employee_id ? `/employees/${user.employee_id}` : '/employees',
+      icon: <UserCheck className="w-[18px] h-[18px]" />,
+      visible: role === 'Employee' || (hasEmployeeProfile && !isAdmin && role !== 'HR Manager'),
     },
     {
       name: 'Departments',
@@ -48,6 +66,93 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     },
   ];
 
+  // 2. Contracts & Schedules (Phase 3)
+  const contractNavItems = [
+    {
+      name: 'Contracts',
+      path: '/contracts',
+      icon: <FileText className="w-[18px] h-[18px]" />,
+      visible: isAdmin || checkPermission('CONTRACTS', 'READ'),
+    },
+    {
+      name: 'Working Schedules',
+      path: '/working-schedules',
+      icon: <Clock className="w-[18px] h-[18px]" />,
+      visible: isAdmin || checkPermission('WORKING_SCHEDULES', 'READ'),
+    },
+  ];
+
+  // 3. Attendance (Phase 4)
+  const attendanceNavItems = [
+    {
+      name: 'Attendance',
+      path: '/attendance',
+      icon: <CalendarCheck className="w-[18px] h-[18px]" />,
+      visible: isAdmin || (role !== 'Employee' && checkPermission('ATTENDANCE', 'READ')),
+    },
+    {
+      name: 'My Attendance',
+      path: '/my-attendance',
+      icon: <Clock className="w-[18px] h-[18px]" />,
+      visible: hasEmployeeProfile || role === 'Employee',
+    },
+    {
+      name: 'Attendance Policies',
+      path: '/attendance-policies',
+      icon: <ShieldCheck className="w-[18px] h-[18px]" />,
+      visible: isAdmin || checkPermission('ATTENDANCE_POLICIES', 'READ'),
+    },
+  ];
+
+  // 4. Time Off (Phase 5)
+  const timeOffNavItems = [
+    {
+      name: 'Time Off & Leaves',
+      path: '/time-off',
+      icon: <Calendar className="w-[18px] h-[18px]" />,
+      visible: isAdmin || checkPermission('LEAVE_REQUESTS', 'READ') || hasEmployeeProfile,
+    },
+  ];
+
+  // 5. Salary Configuration (Phase 6)
+  const salaryNavItems = [
+    {
+      name: 'Salary Structures',
+      path: '/salary-structures',
+      icon: <Sliders className="w-[18px] h-[18px]" />,
+      visible: isAdmin || checkPermission('SALARY_STRUCTURES', 'READ'),
+    },
+    {
+      name: 'Salary Rules',
+      path: '/salary-rules',
+      icon: <Calculator className="w-[18px] h-[18px]" />,
+      visible: isAdmin || checkPermission('SALARY_RULES', 'READ'),
+    },
+  ];
+
+  // 6. Payroll & Payslips (Phases 7 & 8)
+  const payrollNavItems = [
+    {
+      name: 'Payroll Runs',
+      path: '/payroll/payruns',
+      icon: <DollarSign className="w-[18px] h-[18px]" />,
+      visible: isAdmin || checkPermission('PAYRUNS', 'READ'),
+    },
+    {
+      name: 'Payroll History',
+      path: '/payroll/history',
+      icon: <History className="w-[18px] h-[18px]" />,
+      visible: isAdmin || checkPermission('PAYRUNS', 'READ'),
+    },
+    {
+      name: 'Payslips',
+      path: '/payslips',
+      icon: <Receipt className="w-[18px] h-[18px]" />,
+      visible: isAdmin || checkPermission('PAYSLIPS', 'READ') || hasEmployeeProfile,
+    },
+  ];
+
+  // 7. Administration (Phase 1)
   const adminNavItems = [
     {
       name: 'Users',
@@ -69,8 +174,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     },
   ];
 
-  const visibleEmployeeItems = employeeNavItems.filter((item) => item.visible);
-  const visibleAdminItems = adminNavItems.filter((item) => item.visible);
+  const sections = [
+    { title: 'Organization & HR', items: employeeNavItems.filter((i) => i.visible) },
+    { title: 'Contracts & Shift Schedules', items: contractNavItems.filter((i) => i.visible) },
+    { title: 'Attendance', items: attendanceNavItems.filter((i) => i.visible) },
+    { title: 'Time Off & Leaves', items: timeOffNavItems.filter((i) => i.visible) },
+    { title: 'Salary Configuration', items: salaryNavItems.filter((i) => i.visible) },
+    { title: 'Payroll & Payslips', items: payrollNavItems.filter((i) => i.visible) },
+    { title: 'Administration', items: adminNavItems.filter((i) => i.visible) },
+  ].filter((sec) => sec.items.length > 0);
 
   return (
     <>
@@ -90,7 +202,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         }`}
       >
         {/* Brand Header */}
-        <div className="h-16 flex items-center justify-between px-6 border-b border-[#E2E8F0]">
+        <div className="h-16 flex items-center justify-between px-6 border-b border-[#E2E8F0] shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-[#2563EB] flex items-center justify-center text-white font-bold text-base shadow-xs">
               P
@@ -111,18 +223,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* Navigation Items */}
+        {/* Navigation Sections */}
         <div className="flex-1 px-3 py-4 space-y-6 overflow-y-auto">
-          {/* Section: Employees & Organization */}
-          {visibleEmployeeItems.length > 0 && (
-            <div>
-              <div className="px-3 pb-2">
-                <p className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider">
-                  Organization & HR
+          {sections.map((sec) => (
+            <div key={sec.title}>
+              <div className="px-3 pb-1.5">
+                <p className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider">
+                  {sec.title}
                 </p>
               </div>
-              <nav className="space-y-1">
-                {visibleEmployeeItems.map((item) => (
+              <nav className="space-y-0.5">
+                {sec.items.map((item) => (
                   <NavLink
                     key={item.path}
                     to={item.path}
@@ -130,7 +241,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                       if (window.innerWidth < 1024) onClose();
                     }}
                     className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      `flex items-center gap-2.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                         isActive
                           ? 'bg-[#EFF6FF] text-[#2563EB] font-semibold'
                           : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
@@ -143,47 +254,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 ))}
               </nav>
             </div>
-          )}
-
-          {/* Section: Administration */}
-          {visibleAdminItems.length > 0 && (
-            <div>
-              <div className="px-3 pb-2">
-                <p className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider">
-                  Administration
-                </p>
-              </div>
-              <nav className="space-y-1">
-                {visibleAdminItems.map((item) => (
-                  <NavLink
-                    key={item.path}
-                    to={item.path}
-                    onClick={() => {
-                      if (window.innerWidth < 1024) onClose();
-                    }}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                        isActive
-                          ? 'bg-[#EFF6FF] text-[#2563EB] font-semibold'
-                          : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
-                      }`
-                    }
-                  >
-                    {item.icon}
-                    <span>{item.name}</span>
-                  </NavLink>
-                ))}
-              </nav>
-            </div>
-          )}
+          ))}
         </div>
 
         {/* Footer info */}
-        <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAFC]">
+        <div className="p-3 border-t border-[#E2E8F0] bg-[#F8FAFC] shrink-0">
           <div className="flex items-center justify-between text-xs text-[#64748B]">
-            <span>Phase 2 Org & HR</span>
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium text-[10px]">
-              Active
+            <span className="font-medium text-[11px]">PeoplePay360 System</span>
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold text-[10px]">
+              Phases 1–8 Active
             </span>
           </div>
         </div>
@@ -191,3 +270,4 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     </>
   );
 };
+export default Sidebar;

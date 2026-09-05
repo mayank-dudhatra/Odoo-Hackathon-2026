@@ -59,6 +59,7 @@ const employeeQuerySchema = z.object({
   employee_type_id: z.coerce.number().int().positive().optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "TERMINATED"]).optional(),
   manager_id: z.coerce.number().int().positive().optional(),
+  employee_id: z.coerce.number().int().positive().optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   sortBy: z.enum(["employee_code", "first_name", "last_name", "email", "hire_date", "status", "created_at", "updated_at"]).default("created_at"),

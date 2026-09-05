@@ -30,8 +30,15 @@ import { useAuth } from '../../hooks/useAuth';
 
 export const EmployeesPage: React.FC = () => {
   const navigate = useNavigate();
-  const { checkPermission, role } = useAuth();
+  const { checkPermission, role, user } = useAuth();
   const isAdmin = role === 'Admin';
+
+  // If current user is an employee, redirect directly to their own profile
+  useEffect(() => {
+    if (role === 'Employee' && user?.employee_id) {
+      navigate(`/employees/${user.employee_id}`, { replace: true });
+    }
+  }, [role, user, navigate]);
 
   const canCreate = isAdmin || checkPermission('EMPLOYEES', 'CREATE');
   const canUpdate = isAdmin || checkPermission('EMPLOYEES', 'UPDATE');

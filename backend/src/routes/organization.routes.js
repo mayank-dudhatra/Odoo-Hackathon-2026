@@ -64,7 +64,18 @@ router.post("/employee-types", requirePermission("EMPLOYEE_TYPES", "CREATE"), va
 router.patch("/employee-types/:id", requirePermission("EMPLOYEE_TYPES", "UPDATE"), validateRequest({ params: idParam, body: employeeTypeSchema.partial() }), updateEmployeeType);
 router.patch("/employee-types/:id/status", requirePermission("EMPLOYEE_TYPES", "DELETE"), validateRequest({ params: idParam, body: employeeTypeSchema.pick({ is_active: true }) }), setEmployeeTypeStatus);
 
-router.get("/employees", requirePermission("EMPLOYEES", "READ"), validateRequest({ query: employeeQuerySchema }), listEmployees);
+router.get(
+  "/employees",
+  requirePermission("EMPLOYEES", "READ"),
+  (req, res, next) => {
+    if (req.permission && req.permission.scope === "OWN") {
+      req.query.employee_id = req.auth.employee_id || -1;
+    }
+    next();
+  },
+  validateRequest({ query: employeeQuerySchema }),
+  listEmployees
+);
 router.get("/employees/me", requirePermission("EMPLOYEES", "READ", { ownResolver: () => true }), myEmployee);
 router.get("/employees/:id", requirePermission("EMPLOYEES", "READ", { ownResolver: (req) => Number(req.params.id) === Number(req.auth.employee_id) }), validateRequest({ params: idParam }), getEmployee);
 router.post("/employees", requirePermission("EMPLOYEES", "CREATE"), validateRequest({ body: employeeSchema }), createEmployee);
