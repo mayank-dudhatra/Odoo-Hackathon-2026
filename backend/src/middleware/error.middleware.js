@@ -15,6 +15,38 @@ function errorHandler(error, req, res, next) {
     return next(error);
   }
 
+  if (error && error.code && typeof error.code === "string") {
+    if (error.code === "23505") {
+      return res.status(409).json({
+        success: false,
+        error: {
+          code: "DUPLICATE_RECORD",
+          message: "A record with the same unique value already exists",
+        },
+      });
+    }
+
+    if (error.code === "23503") {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "INVALID_REFERENCE",
+          message: "One or more references are invalid",
+        },
+      });
+    }
+
+    if (error.code === "23514" || error.code === "23P01" || error.code === "P0001") {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "CONSTRAINT_VIOLATION",
+          message: error.message,
+        },
+      });
+    }
+  }
+
   if (error instanceof AppError) {
     return res.status(error.statusCode).json({
       success: false,

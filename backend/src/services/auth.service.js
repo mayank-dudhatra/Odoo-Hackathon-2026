@@ -579,6 +579,34 @@ async function resendInvitation({ actor, targetUserId }) {
   };
 }
 
+async function getCurrentUserProfile(userId, companyId) {
+  const result = await query(
+    `
+      SELECT
+        u.user_id,
+        u.company_id,
+        u.employee_id,
+        u.username,
+        u.email,
+        u.role_id,
+        r.role_name,
+        u.status,
+        u.invitation_expires_at,
+        u.email_verified_at,
+        u.last_login_at,
+        u.created_at,
+        u.updated_at
+      FROM users u
+      JOIN roles r ON r.role_id = u.role_id
+      WHERE u.user_id = $1 AND u.company_id = $2
+      LIMIT 1
+    `,
+    [userId, companyId]
+  );
+
+  return buildPublicUser(result.rows[0] || null);
+}
+
 module.exports = {
   setupInitialCompany,
   login,
@@ -589,4 +617,5 @@ module.exports = {
   changePassword,
   createInvitationForUser,
   resendInvitation,
+  getCurrentUserProfile,
 };

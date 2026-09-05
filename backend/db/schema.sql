@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS departments (
   name VARCHAR(100) NOT NULL,
   parent_department_id INT,
   manager_id INT,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
   CONSTRAINT fk_departments_company FOREIGN KEY (company_id) REFERENCES companies(company_id) ON DELETE CASCADE,
@@ -109,6 +110,7 @@ CREATE TABLE IF NOT EXISTS positions (
   company_id INT NOT NULL,
   title VARCHAR(100) NOT NULL,
   department_id INT,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
   CONSTRAINT fk_positions_company FOREIGN KEY (company_id) REFERENCES companies(company_id) ON DELETE CASCADE,
@@ -120,6 +122,7 @@ CREATE TABLE IF NOT EXISTS employee_types (
   employee_type_id SERIAL PRIMARY KEY,
   company_id INT NOT NULL,
   name VARCHAR(50) NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
   CONSTRAINT fk_employee_types_company FOREIGN KEY (company_id) REFERENCES companies(company_id) ON DELETE CASCADE,
@@ -241,6 +244,217 @@ CREATE TABLE IF NOT EXISTS employees (
   CONSTRAINT uq_employees_company_email UNIQUE (company_id, email),
   CONSTRAINT chk_employees_status CHECK (status IN ('ACTIVE', 'INACTIVE', 'TERMINATED'))
 );
+
+CREATE OR REPLACE FUNCTION validate_company_scope_department()
+RETURNS TRIGGER AS $$
+DECLARE
+  parent_company_id INT;
+  manager_company_id INT;
+BEGIN
+  IF NEW.parent_department_id IS NOT NULL THEN
+    SELECT company_id INTO parent_company_id
+    FROM departments
+    WHERE department_id = NEW.parent_department_id;
+
+    IF parent_company_id IS NULL OR parent_company_id <> NEW.company_id THEN
+      RAISE EXCEPTION 'Parent department must belong to the same company';
+    END IF;
+  END IF;
+
+  IF NEW.manager_id IS NOT NULL THEN
+    SELECT company_id INTO manager_company_id
+    FROM employees
+    WHERE employee_id = NEW.manager_id;
+
+    IF manager_company_id IS NULL OR manager_company_id <> NEW.company_id THEN
+      RAISE EXCEPTION 'Department manager must belong to the same company';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION validate_company_scope_position()
+RETURNS TRIGGER AS $$
+DECLARE
+  department_company_id INT;
+BEGIN
+  IF NEW.department_id IS NOT NULL THEN
+    SELECT company_id INTO department_company_id
+    FROM departments
+    WHERE department_id = NEW.department_id;
+
+    IF department_company_id IS NULL OR department_company_id <> NEW.company_id THEN
+      RAISE EXCEPTION 'Position department must belong to the same company';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION validate_company_scope_employee_type()
+RETURNS TRIGGER AS $$
+BEGIN
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION validate_company_scope_employee()
+RETURNS TRIGGER AS $$
+DECLARE
+  related_company_id INT;
+BEGIN
+  IF NEW.department_id IS NOT NULL THEN
+    SELECT company_id INTO related_company_id FROM departments WHERE department_id = NEW.department_id;
+    IF related_company_id IS NULL OR related_company_id <> NEW.company_id THEN
+      RAISE EXCEPTION 'Employee department must belong to the same company';
+    END IF;
+  END IF;
+
+  IF NEW.position_id IS NOT NULL THEN
+    SELECT company_id INTO related_company_id FROM positions WHERE position_id = NEW.position_id;
+    IF related_company_id IS NULL OR related_company_id <> NEW.company_id THEN
+      RAISE EXCEPTION 'Employee position must belong to the same company';
+    END IF;
+  END IF;
+
+  IF NEW.employee_type_id IS NOT NULL THEN
+    SELECT company_id INTO related_company_id FROM employee_types WHERE employee_type_id = NEW.employee_type_id;
+    IF related_company_id IS NULL OR related_company_id <> NEW.company_id THEN
+      RAISE EXCEPTION 'Employee type must belong to the same company';
+    END IF;
+  END IF;
+
+  IF NEW.schedule_id IS NOT NULL THEN
+    SELECT company_id INTO related_company_id FROM working_schedules WHERE schedule_id = NEW.schedule_id;
+    IF related_company_id IS NULL OR related_company_id <> NEW.company_id THEN
+      RAISE EXCEPTION 'Employee schedule must belong to the same company';
+    END IF;
+  END IF;
+
+  IF NEW.manager_id IS NOT NULL THEN
+    IF NEW.manager_id = NEW.employee_id THEN
+      RAISE EXCEPTION 'Employee cannot manage themselves';
+    END IF;
+
+    SELECT company_id INTO related_company_id FROM employees WHERE employee_id = NEW.manager_id;
+    IF related_company_id IS NULL OR related_company_id <> NEW.company_id THEN
+      RAISE EXCEPTION 'Employee manager must belong to the same company';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION validate_company_scope_user()
+RETURNS TRIGGER AS $$
+DECLARE
+  employee_company_id INT;
+BEGIN
+  IF NEW.employee_id IS NOT NULL THEN
+    SELECT company_id INTO employee_company_id FROM employees WHERE employee_id = NEW.employee_id;
+    IF employee_company_id IS NULL OR employee_company_id <> NEW.company_id THEN
+      RAISE EXCEPTION 'User employee link must belong to the same company';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION validate_company_scope_working_schedule()
+RETURNS TRIGGER AS $$
+DECLARE
+  policy_company_id INT;
+BEGIN
+  IF NEW.attendance_policy_id IS NOT NULL THEN
+    SELECT company_id INTO policy_company_id FROM attendance_policies WHERE policy_id = NEW.attendance_policy_id;
+    IF policy_company_id IS NULL OR policy_company_id <> NEW.company_id THEN
+      RAISE EXCEPTION 'Attendance policy must belong to the same company';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION validate_company_scope_contract()
+RETURNS TRIGGER AS $$
+DECLARE
+  related_company_id INT;
+BEGIN
+  SELECT company_id INTO related_company_id FROM employees WHERE employee_id = NEW.employee_id;
+  IF related_company_id IS NULL OR related_company_id <> NEW.company_id THEN
+    RAISE EXCEPTION 'Contract employee must belong to the same company';
+  END IF;
+
+  IF NEW.position_id IS NOT NULL THEN
+    SELECT company_id INTO related_company_id FROM positions WHERE position_id = NEW.position_id;
+    IF related_company_id IS NULL OR related_company_id <> NEW.company_id THEN
+      RAISE EXCEPTION 'Contract position must belong to the same company';
+    END IF;
+  END IF;
+
+  IF NEW.department_id IS NOT NULL THEN
+    SELECT company_id INTO related_company_id FROM departments WHERE department_id = NEW.department_id;
+    IF related_company_id IS NULL OR related_company_id <> NEW.company_id THEN
+      RAISE EXCEPTION 'Contract department must belong to the same company';
+    END IF;
+  END IF;
+
+  IF NEW.schedule_id IS NOT NULL THEN
+    SELECT company_id INTO related_company_id FROM working_schedules WHERE schedule_id = NEW.schedule_id;
+    IF related_company_id IS NULL OR related_company_id <> NEW.company_id THEN
+      RAISE EXCEPTION 'Contract schedule must belong to the same company';
+    END IF;
+  END IF;
+
+  SELECT company_id INTO related_company_id FROM salary_structures WHERE salary_structure_id = NEW.salary_structure_id;
+  IF related_company_id IS NULL OR related_company_id <> NEW.company_id THEN
+    RAISE EXCEPTION 'Salary structure must belong to the same company';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_departments_company_scope ON departments;
+CREATE TRIGGER trg_departments_company_scope
+BEFORE INSERT OR UPDATE ON departments
+FOR EACH ROW EXECUTE FUNCTION validate_company_scope_department();
+
+DROP TRIGGER IF EXISTS trg_positions_company_scope ON positions;
+CREATE TRIGGER trg_positions_company_scope
+BEFORE INSERT OR UPDATE ON positions
+FOR EACH ROW EXECUTE FUNCTION validate_company_scope_position();
+
+DROP TRIGGER IF EXISTS trg_employee_types_company_scope ON employee_types;
+CREATE TRIGGER trg_employee_types_company_scope
+BEFORE INSERT OR UPDATE ON employee_types
+FOR EACH ROW EXECUTE FUNCTION validate_company_scope_employee_type();
+
+DROP TRIGGER IF EXISTS trg_employees_company_scope ON employees;
+CREATE TRIGGER trg_employees_company_scope
+BEFORE INSERT OR UPDATE ON employees
+FOR EACH ROW EXECUTE FUNCTION validate_company_scope_employee();
+
+DROP TRIGGER IF EXISTS trg_users_company_scope ON users;
+CREATE TRIGGER trg_users_company_scope
+BEFORE INSERT OR UPDATE ON users
+FOR EACH ROW EXECUTE FUNCTION validate_company_scope_user();
+
+DROP TRIGGER IF EXISTS trg_working_schedules_company_scope ON working_schedules;
+CREATE TRIGGER trg_working_schedules_company_scope
+BEFORE INSERT OR UPDATE ON working_schedules
+FOR EACH ROW EXECUTE FUNCTION validate_company_scope_working_schedule();
+
+DROP TRIGGER IF EXISTS trg_contracts_company_scope ON contracts;
+CREATE TRIGGER trg_contracts_company_scope
+BEFORE INSERT OR UPDATE ON contracts
+FOR EACH ROW EXECUTE FUNCTION validate_company_scope_contract();
 
 ALTER TABLE departments
   DROP CONSTRAINT IF EXISTS fk_departments_manager,
@@ -557,6 +771,8 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO permissions (module, action)
 VALUES
   ('DASHBOARD', 'READ'),
+  ('COMPANY', 'READ'),
+  ('COMPANY', 'UPDATE'),
   ('USERS', 'CREATE'),
   ('USERS', 'READ'),
   ('USERS', 'UPDATE'),
@@ -581,6 +797,7 @@ VALUES
   ('EMPLOYEES', 'READ'),
   ('EMPLOYEES', 'UPDATE'),
   ('EMPLOYEES', 'DELETE'),
+  ('EMPLOYEES', 'UPDATE_STATUS'),
   ('EMPLOYEES', 'APPROVE'),
   ('EMPLOYEES', 'REFUSE'),
   ('EMPLOYEES', 'PROCESS'),
@@ -607,6 +824,10 @@ VALUES
   ('POSITIONS', 'VALIDATE'),
   ('POSITIONS', 'PAY'),
   ('POSITIONS', 'EXPORT'),
+  ('EMPLOYEE_TYPES', 'CREATE'),
+  ('EMPLOYEE_TYPES', 'READ'),
+  ('EMPLOYEE_TYPES', 'UPDATE'),
+  ('EMPLOYEE_TYPES', 'DELETE'),
   ('CONTRACTS', 'CREATE'),
   ('CONTRACTS', 'READ'),
   ('CONTRACTS', 'UPDATE'),
@@ -762,10 +983,13 @@ FROM roles r
 JOIN permissions p
   ON (
     (p.module = 'DASHBOARD' AND p.action = 'READ') OR
+    (p.module = 'COMPANY' AND p.action = 'READ') OR
     (p.module = 'USERS' AND p.action IN ('READ')) OR
     (p.module = 'EMPLOYEES' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'DELETE', 'EXPORT')) OR
+    (p.module = 'EMPLOYEES' AND p.action = 'UPDATE_STATUS') OR
     (p.module = 'DEPARTMENTS' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'DELETE')) OR
     (p.module = 'POSITIONS' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'DELETE')) OR
+    (p.module = 'EMPLOYEE_TYPES' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'DELETE')) OR
     (p.module = 'CONTRACTS' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'DELETE', 'VALIDATE')) OR
     (p.module = 'WORKING_SCHEDULES' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'DELETE')) OR
     (p.module = 'ATTENDANCE' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'APPROVE', 'REFUSE', 'EXPORT')) OR
@@ -785,8 +1009,11 @@ FROM roles r
 JOIN permissions p
   ON (
     (p.module = 'DASHBOARD' AND p.action = 'READ') OR
+    (p.module = 'COMPANY' AND p.action = 'READ') OR
     (p.module = 'USERS' AND p.action IN ('READ')) OR
     (p.module = 'EMPLOYEES' AND p.action IN ('READ', 'EXPORT')) OR
+    (p.module = 'EMPLOYEES' AND p.action = 'UPDATE_STATUS') OR
+    (p.module = 'EMPLOYEE_TYPES' AND p.action IN ('READ')) OR
     (p.module = 'CONTRACTS' AND p.action IN ('READ')) OR
     (p.module = 'SALARY_STRUCTURES' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'DELETE', 'VALIDATE')) OR
     (p.module = 'SALARY_RULES' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'DELETE', 'VALIDATE')) OR
@@ -805,6 +1032,7 @@ FROM roles r
 JOIN permissions p
   ON (
     (p.module = 'DASHBOARD' AND p.action = 'READ') OR
+    (p.module = 'COMPANY' AND p.action = 'READ') OR
     (p.module = 'EMPLOYEES' AND p.action IN ('READ')) OR
     (p.module = 'CONTRACTS' AND p.action IN ('READ')) OR
     (p.module = 'PAYRUNS' AND p.action IN ('CREATE', 'READ', 'PROCESS')) OR
@@ -820,6 +1048,7 @@ FROM roles r
 JOIN permissions p
   ON (
     (p.module = 'DASHBOARD' AND p.action = 'READ') OR
+    (p.module = 'COMPANY' AND p.action = 'READ') OR
     (p.module = 'EMPLOYEES' AND p.action IN ('READ', 'UPDATE')) OR
     (p.module = 'ATTENDANCE' AND p.action IN ('READ')) OR
     (p.module = 'LEAVE_REQUESTS' AND p.action IN ('CREATE', 'READ', 'UPDATE')) OR
