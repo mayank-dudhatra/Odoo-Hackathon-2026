@@ -695,8 +695,6 @@ async function getCurrentUserProfile(userId, companyId) {
   return buildPublicUser(result.rows[0] || null);
 }
 
-const { sendPasswordResetEmail } = require("./email.service");
-
 async function requestPasswordReset({ email }) {
   const genericResponse = {
     message: "If an account with that email exists, a password reset link has been sent.",
