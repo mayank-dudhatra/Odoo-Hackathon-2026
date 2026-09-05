@@ -49,9 +49,7 @@ const UserFormContent: React.FC<{
         const list = await rolesApi.listRoles();
         if (active && list.length > 0) {
           setRoles(list);
-          if (!userToEdit && !roleName) {
-            setRoleName(list[0].role_name);
-          }
+          setRoleName((prev) => (!userToEdit && !prev ? list[0].role_name : prev));
         }
       } catch {
         // Fallback to DEFAULT_ROLES

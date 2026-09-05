@@ -1,6 +1,15 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Users, Shield, KeyRound, X } from 'lucide-react';
+import {
+  Users,
+  Building2,
+  Briefcase,
+  Layers,
+  Shield,
+  KeyRound,
+  UserCheck,
+  X,
+} from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 
 interface SidebarProps {
@@ -12,7 +21,34 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { checkPermission, role } = useAuth();
   const isAdmin = role === 'Admin';
 
-  const navItems = [
+  const employeeNavItems = [
+    {
+      name: 'All Employees',
+      path: '/employees',
+      icon: <UserCheck className="w-[18px] h-[18px]" />,
+      visible: isAdmin || checkPermission('EMPLOYEES', 'READ'),
+    },
+    {
+      name: 'Departments',
+      path: '/departments',
+      icon: <Building2 className="w-[18px] h-[18px]" />,
+      visible: isAdmin || checkPermission('DEPARTMENTS', 'READ'),
+    },
+    {
+      name: 'Positions',
+      path: '/positions',
+      icon: <Briefcase className="w-[18px] h-[18px]" />,
+      visible: isAdmin || checkPermission('POSITIONS', 'READ'),
+    },
+    {
+      name: 'Employee Types',
+      path: '/employee-types',
+      icon: <Layers className="w-[18px] h-[18px]" />,
+      visible: isAdmin || checkPermission('EMPLOYEE_TYPES', 'READ'),
+    },
+  ];
+
+  const adminNavItems = [
     {
       name: 'Users',
       path: '/users',
@@ -33,7 +69,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     },
   ];
 
-  const visibleNavItems = navItems.filter((item) => item.visible);
+  const visibleEmployeeItems = employeeNavItems.filter((item) => item.visible);
+  const visibleAdminItems = adminNavItems.filter((item) => item.visible);
 
   return (
     <>
@@ -74,40 +111,77 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* Section Label */}
-        <div className="px-6 pt-5 pb-2">
-          <p className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider">
-            Administration
-          </p>
-        </div>
-
         {/* Navigation Items */}
-        <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
-          {visibleNavItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              onClick={() => {
-                if (window.innerWidth < 1024) onClose();
-              }}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-[#EFF6FF] text-[#2563EB] font-semibold'
-                    : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
-                }`
-              }
-            >
-              {item.icon}
-              <span>{item.name}</span>
-            </NavLink>
-          ))}
-        </nav>
+        <div className="flex-1 px-3 py-4 space-y-6 overflow-y-auto">
+          {/* Section: Employees & Organization */}
+          {visibleEmployeeItems.length > 0 && (
+            <div>
+              <div className="px-3 pb-2">
+                <p className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider">
+                  Organization & HR
+                </p>
+              </div>
+              <nav className="space-y-1">
+                {visibleEmployeeItems.map((item) => (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => {
+                      if (window.innerWidth < 1024) onClose();
+                    }}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        isActive
+                          ? 'bg-[#EFF6FF] text-[#2563EB] font-semibold'
+                          : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
+                      }`
+                    }
+                  >
+                    {item.icon}
+                    <span>{item.name}</span>
+                  </NavLink>
+                ))}
+              </nav>
+            </div>
+          )}
+
+          {/* Section: Administration */}
+          {visibleAdminItems.length > 0 && (
+            <div>
+              <div className="px-3 pb-2">
+                <p className="text-[11px] font-semibold text-[#94A3B8] uppercase tracking-wider">
+                  Administration
+                </p>
+              </div>
+              <nav className="space-y-1">
+                {visibleAdminItems.map((item) => (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => {
+                      if (window.innerWidth < 1024) onClose();
+                    }}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        isActive
+                          ? 'bg-[#EFF6FF] text-[#2563EB] font-semibold'
+                          : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
+                      }`
+                    }
+                  >
+                    {item.icon}
+                    <span>{item.name}</span>
+                  </NavLink>
+                ))}
+              </nav>
+            </div>
+          )}
+        </div>
 
         {/* Footer info */}
         <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAFC]">
           <div className="flex items-center justify-between text-xs text-[#64748B]">
-            <span>Phase 1 RBAC</span>
+            <span>Phase 2 Org & HR</span>
             <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium text-[10px]">
               Active
             </span>
