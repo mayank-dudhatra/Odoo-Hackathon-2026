@@ -202,6 +202,21 @@ async function login({ identifier, password, ipAddress, userAgent }) {
     throw new AppError(403, "Account disabled", "ACCOUNT_DISABLED");
   }
 
+  if (!user.employee_id && user.email) {
+    const empMatch = await query(
+      `SELECT employee_id, first_name, last_name, employee_code FROM employees WHERE company_id = $1 AND LOWER(email) = LOWER($2) LIMIT 1`,
+      [user.company_id, user.email.trim()]
+    );
+    if (empMatch.rows[0]) {
+      const emp = empMatch.rows[0];
+      await query(`UPDATE users SET employee_id = $1, updated_at = NOW() WHERE user_id = $2 AND employee_id IS NULL`, [emp.employee_id, user.user_id]);
+      user.employee_id = emp.employee_id;
+      user.first_name = emp.first_name;
+      user.last_name = emp.last_name;
+      user.employee_code = emp.employee_code;
+    }
+  }
+
   const refreshToken = generateRefreshToken();
   const refreshTokenHash = hashToken(refreshToken);
 
@@ -561,6 +576,17 @@ async function createInvitationForUser({ actor, payload }) {
   const tempPassword = generateTemporaryPassword(12);
   const passwordHash = await hashPassword(tempPassword);
 
+  let assignedEmployeeId = payload.employee_id || null;
+  if (!assignedEmployeeId && payload.email) {
+    const empMatch = await query(
+      `SELECT employee_id FROM employees WHERE company_id = $1 AND LOWER(email) = LOWER($2) LIMIT 1`,
+      [actor.company_id, payload.email.trim()]
+    );
+    if (empMatch.rows[0]) {
+      assignedEmployeeId = empMatch.rows[0].employee_id;
+    }
+  }
+
   const result = await query(
     `
       INSERT INTO users (
@@ -589,7 +615,7 @@ async function createInvitationForUser({ actor, payload }) {
     `,
     [
       actor.company_id,
-      payload.employee_id || null,
+      assignedEmployeeId,
       payload.username,
       payload.email,
       passwordHash,
@@ -779,7 +805,23 @@ async function getCurrentUserProfile(userId, companyId) {
     [userId, companyId]
   );
 
-  const user = buildPublicUser(result.rows[0] || null);
+  let row = result.rows[0] || null;
+  if (row && !row.employee_id && row.email) {
+    const empMatch = await query(
+      `SELECT employee_id, first_name, last_name, employee_code FROM employees WHERE company_id = $1 AND LOWER(email) = LOWER($2) LIMIT 1`,
+      [companyId, row.email.trim()]
+    );
+    if (empMatch.rows[0]) {
+      const emp = empMatch.rows[0];
+      await query(`UPDATE users SET employee_id = $1, updated_at = NOW() WHERE user_id = $2 AND employee_id IS NULL`, [emp.employee_id, userId]);
+      row.employee_id = emp.employee_id;
+      row.first_name = emp.first_name;
+      row.last_name = emp.last_name;
+      row.employee_code = emp.employee_code;
+    }
+  }
+
+  const user = buildPublicUser(row);
   if (!user) return null;
 
   const permissions = await getRolePermissions(user.role_id);

@@ -465,11 +465,19 @@ async function createEmployeeRecord(auth, payload) {
   if (employee && employee.email && payload.create_user_account !== false) {
     try {
       const existingUser = await query(
-        `SELECT user_id FROM users WHERE company_id = $1 AND (LOWER(email) = LOWER($2) OR employee_id = $3) LIMIT 1`,
+        `SELECT user_id, employee_id FROM users WHERE company_id = $1 AND (LOWER(email) = LOWER($2) OR employee_id = $3) LIMIT 1`,
         [auth.company_id, employee.email.trim(), employeeId]
       );
 
-      if (!existingUser.rows[0]) {
+      if (existingUser.rows[0]) {
+        if (!existingUser.rows[0].employee_id) {
+          await query(
+            `UPDATE users SET employee_id = $1, updated_at = NOW() WHERE user_id = $2 AND employee_id IS NULL`,
+            [employeeId, existingUser.rows[0].user_id]
+          );
+          console.log(`[OrganizationService] Linked existing user (ID: ${existingUser.rows[0].user_id}) to employee ID ${employeeId}`);
+        }
+      } else {
         const cleanFirst = (employee.first_name || "emp").toLowerCase().replace(/[^a-z0-9]/g, "");
         const cleanLast = (employee.last_name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
         let baseUsername = cleanLast ? `${cleanFirst}.${cleanLast}` : cleanFirst;
@@ -670,6 +678,13 @@ async function updateEmployeeRecord(auth, employeeId, payload) {
 
   const updatedId = await updateEmployee(auth.company_id, employeeId, payload);
   const employee = await getEmployeeById(auth.company_id, updatedId);
+
+  if (employee && employee.email) {
+    await query(
+      `UPDATE users SET employee_id = $1, updated_at = NOW() WHERE company_id = $2 AND LOWER(email) = LOWER($3) AND employee_id IS NULL`,
+      [employeeId, auth.company_id, employee.email.trim()]
+    );
+  }
 
   await createAuditLog({
     companyId: auth.company_id,

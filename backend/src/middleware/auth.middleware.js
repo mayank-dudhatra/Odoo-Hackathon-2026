@@ -45,6 +45,17 @@ async function authenticate(req, res, next) {
       throw new AppError(401, "Invalid authentication", "INVALID_AUTH");
     }
 
+    if (!user.employee_id) {
+      const empResult = await query(
+        `SELECT employee_id FROM employees WHERE company_id = $1 AND LOWER(email) = (SELECT LOWER(email) FROM users WHERE user_id = $2) LIMIT 1`,
+        [user.company_id, user.user_id]
+      );
+      if (empResult.rows[0]) {
+        user.employee_id = empResult.rows[0].employee_id;
+        await query(`UPDATE users SET employee_id = $1, updated_at = NOW() WHERE user_id = $2 AND employee_id IS NULL`, [user.employee_id, user.user_id]);
+      }
+    }
+
     if (user.status !== "ACTIVE") {
       throw new AppError(403, "Account unavailable", "ACCOUNT_UNAVAILABLE");
     }
