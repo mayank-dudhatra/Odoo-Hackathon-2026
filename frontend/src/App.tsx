@@ -6,6 +6,12 @@ import { LoginPage } from './pages/auth/LoginPage';
 import { UsersPage } from './pages/users/UsersPage';
 import { RolesPage } from './pages/roles/RolesPage';
 import { PermissionsPage } from './pages/permissions/PermissionsPage';
+import { DepartmentsPage } from './pages/departments/DepartmentsPage';
+import { PositionsPage } from './pages/positions/PositionsPage';
+import { EmployeeTypesPage } from './pages/employee-types/EmployeeTypesPage';
+import { EmployeesPage } from './pages/employees/EmployeesPage';
+import { EmployeeDetailPage } from './pages/employees/EmployeeDetailPage';
+import { EmployeeFormPage } from './pages/employees/EmployeeFormPage';
 import { ForbiddenPage } from './pages/error/ForbiddenPage';
 import { NotFoundPage } from './pages/error/NotFoundPage';
 
@@ -25,8 +31,73 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<Navigate to="/users" replace />} />
-            
+            <Route index element={<Navigate to="/employees" replace />} />
+
+            {/* Phase 2: Employee & Organization Routes */}
+            <Route
+              path="/employees"
+              element={
+                <ProtectedRoute requiredPermission={{ module: 'EMPLOYEES', action: 'READ' }}>
+                  <EmployeesPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/employees/new"
+              element={
+                <ProtectedRoute requiredPermission={{ module: 'EMPLOYEES', action: 'CREATE' }}>
+                  <EmployeeFormPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/employees/:id"
+              element={
+                <ProtectedRoute requiredPermission={{ module: 'EMPLOYEES', action: 'READ' }}>
+                  <EmployeeDetailPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/employees/:id/edit"
+              element={
+                <ProtectedRoute requiredPermission={{ module: 'EMPLOYEES', action: 'UPDATE' }}>
+                  <EmployeeFormPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/departments"
+              element={
+                <ProtectedRoute requiredPermission={{ module: 'DEPARTMENTS', action: 'READ' }}>
+                  <DepartmentsPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/positions"
+              element={
+                <ProtectedRoute requiredPermission={{ module: 'POSITIONS', action: 'READ' }}>
+                  <PositionsPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/employee-types"
+              element={
+                <ProtectedRoute requiredPermission={{ module: 'EMPLOYEE_TYPES', action: 'READ' }}>
+                  <EmployeeTypesPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Phase 1: Administration Routes */}
             <Route
               path="/users"
               element={
