@@ -8,6 +8,7 @@ const employeeResolverRoutes = require("./employee-resolver.routes");
 const attendancePolicyRoutes = require("./attendance-policy.routes");
 const attendanceRoutes = require("./attendance.routes");
 const leaveRoutes = require("./leave.routes");
+const salaryRoutes = require("./salary.routes");
 
 const router = express.Router();
 
@@ -20,6 +21,7 @@ router.use("/employees", employeeResolverRoutes);
 router.use("/attendance-policies", attendancePolicyRoutes);
 router.use("/attendance", attendanceRoutes);
 router.use("/", leaveRoutes);
+router.use("/", salaryRoutes);
 
 module.exports = router;
 

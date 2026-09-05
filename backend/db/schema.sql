@@ -204,7 +204,7 @@ CREATE TABLE IF NOT EXISTS salary_rules (
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
   CONSTRAINT fk_salary_rules_company FOREIGN KEY (company_id) REFERENCES companies(company_id) ON DELETE CASCADE,
   CONSTRAINT uq_salary_rules_company_code UNIQUE (company_id, code),
-  CONSTRAINT chk_salary_rules_category CHECK (category IN ('BASIC', 'ALLOWANCE', 'GROSS', 'DEDUCTION', 'TAX', 'NET', 'REIMBURSEMENT')),
+  CONSTRAINT chk_salary_rules_category CHECK (category IN ('BASIC', 'ALLOWANCE', 'GROSS', 'DEDUCTION', 'TAX', 'CONTRIBUTION', 'NET', 'REIMBURSEMENT')),
   CONSTRAINT chk_salary_rules_computation_type CHECK (computation_type IN ('FIXED', 'PERCENTAGE', 'FORMULA'))
 );
 
