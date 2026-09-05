@@ -1,5 +1,20 @@
 const { query: defaultQuery } = require("../db");
 
+function parseArgs(firstArg, secondArg, thirdArg) {
+  if (firstArg && typeof firstArg.query === "function") {
+    return {
+      dbQuery: (sql, params) => firstArg.query(sql, params),
+      companyId: secondArg,
+      targetId: thirdArg,
+    };
+  }
+  return {
+    dbQuery: defaultQuery,
+    companyId: firstArg,
+    targetId: secondArg,
+  };
+}
+
 async function createPayrunEmployee(executor = defaultQuery, {
   payrun_id,
   employee_id,
@@ -7,8 +22,11 @@ async function createPayrunEmployee(executor = defaultQuery, {
   status = "SELECTED",
   error_message = null,
 }) {
-  const db = executor.query ? executor : defaultQuery;
-  const result = await db.query(
+  const dbQuery = (executor && typeof executor.query === "function")
+    ? (sql, params) => executor.query(sql, params)
+    : defaultQuery;
+
+  const result = await dbQuery(
     `
       INSERT INTO payrun_employees (
         payrun_id,
@@ -28,33 +46,26 @@ async function createPayrunEmployee(executor = defaultQuery, {
 }
 
 async function deletePayrunEmployees(executor = defaultQuery, payrunId) {
-  const db = executor.query ? executor : defaultQuery;
-  await db.query(`DELETE FROM payrun_employees WHERE payrun_id = $1`, [payrunId]);
+  let dbQuery = defaultQuery;
+  let targetId = payrunId;
+  if (executor && typeof executor.query === "function") {
+    dbQuery = (sql, params) => executor.query(sql, params);
+  } else if (typeof executor === "number") {
+    targetId = executor;
+  }
+  await dbQuery(`DELETE FROM payrun_employees WHERE payrun_id = $1`, [targetId]);
 }
 
-async function createPayslip(executor = defaultQuery, {
-  company_id,
-  payrun_id,
-  employee_id,
-  contract_id,
-  salary_structure_id,
-  employee_name_snapshot,
-  employee_code_snapshot,
-  structure_name_snapshot,
-  period_start,
-  period_end,
-  worked_days = 0,
-  gross_pay = 0,
-  total_deductions = 0,
-  net_pay = 0,
-  status = "COMPUTED",
-  snapshot_data = null,
-  pdf_file_path = null,
-  email_status = "PENDING",
-  created_by = null,
-}) {
-  const db = executor.query ? executor : defaultQuery;
-  const result = await db.query(
+async function createPayslip(executor = defaultQuery, payload) {
+  let dbQuery = defaultQuery;
+  let p = payload;
+  if (executor && typeof executor.query === "function") {
+    dbQuery = (sql, params) => executor.query(sql, params);
+  } else if (payload === undefined && typeof executor === "object") {
+    p = executor;
+  }
+
+  const result = await dbQuery(
     `
       INSERT INTO payslips (
         company_id,
@@ -82,43 +93,40 @@ async function createPayslip(executor = defaultQuery, {
       RETURNING *
     `,
     [
-      company_id,
-      payrun_id,
-      employee_id,
-      contract_id,
-      salary_structure_id,
-      employee_name_snapshot,
-      employee_code_snapshot,
-      structure_name_snapshot,
-      period_start,
-      period_end,
-      worked_days,
-      gross_pay,
-      total_deductions,
-      net_pay,
-      status,
-      snapshot_data ? JSON.stringify(snapshot_data) : null,
-      pdf_file_path,
-      email_status,
-      created_by,
+      p.company_id,
+      p.payrun_id,
+      p.employee_id,
+      p.contract_id,
+      p.salary_structure_id,
+      p.employee_name_snapshot,
+      p.employee_code_snapshot,
+      p.structure_name_snapshot,
+      p.period_start,
+      p.period_end,
+      p.worked_days || 0,
+      p.gross_pay || 0,
+      p.total_deductions || 0,
+      p.net_pay || 0,
+      p.status || "COMPUTED",
+      p.snapshot_data ? JSON.stringify(p.snapshot_data) : null,
+      p.pdf_file_path || null,
+      p.email_status || "PENDING",
+      p.created_by || null,
     ]
   );
   return result.rows[0];
 }
 
-async function createPayslipLine(executor = defaultQuery, {
-  payslip_id,
-  salary_rule_id = null,
-  rule_code_snapshot,
-  label,
-  category,
-  sequence,
-  calculation_input = null,
-  calculation_rate = null,
-  amount,
-}) {
-  const db = executor.query ? executor : defaultQuery;
-  const result = await db.query(
+async function createPayslipLine(executor = defaultQuery, payload) {
+  let dbQuery = defaultQuery;
+  let l = payload;
+  if (executor && typeof executor.query === "function") {
+    dbQuery = (sql, params) => executor.query(sql, params);
+  } else if (payload === undefined && typeof executor === "object") {
+    l = executor;
+  }
+
+  const result = await dbQuery(
     `
       INSERT INTO payslip_lines (
         payslip_id,
@@ -135,47 +143,52 @@ async function createPayslipLine(executor = defaultQuery, {
       RETURNING *
     `,
     [
-      payslip_id,
-      salary_rule_id,
-      rule_code_snapshot,
-      label,
-      category,
-      sequence,
-      calculation_input,
-      calculation_rate,
-      amount,
+      l.payslip_id,
+      l.salary_rule_id || null,
+      l.rule_code_snapshot,
+      l.label,
+      l.category,
+      l.sequence,
+      l.calculation_input || null,
+      l.calculation_rate || null,
+      l.amount,
     ]
   );
   return result.rows[0];
 }
 
-async function updatePayslipPdfPath(executor = defaultQuery, companyId, payslipId, pdfFilePath, status = "GENERATED") {
-  const db = executor.query ? executor : defaultQuery;
-  const result = await db.query(
+async function updatePayslipPdfPath(executor, companyId, payslipId, pdfFilePath, status = "GENERATED") {
+  const { dbQuery, companyId: cId, targetId: pId } = parseArgs(executor, companyId, payslipId);
+  const targetPdf = typeof executor === "number" ? pdfFilePath : pdfFilePath;
+  const targetStatus = typeof executor === "number" ? status : status;
+
+  const result = await dbQuery(
     `
       UPDATE payslips
       SET pdf_file_path = $1, status = $2, generated_at = NOW(), updated_at = NOW()
       WHERE company_id = $3 AND payslip_id = $4
       RETURNING *
     `,
-    [pdfFilePath, status, companyId, payslipId]
+    [targetPdf, targetStatus, cId, pId]
   );
   return result.rows[0] || null;
 }
 
-async function updatePayslipEmailStatus(executor = defaultQuery, companyId, payslipId, { email_status, email_sent_at = null, email_error_message = null, status = null }) {
-  const db = executor.query ? executor : defaultQuery;
-  const updates = ["email_status = $1", "email_sent_at = $2", "email_error_message = $3", "updated_at = NOW()"];
-  const params = [email_status, email_sent_at, email_error_message];
+async function updatePayslipEmailStatus(executor, companyId, payslipId, options = {}) {
+  const { dbQuery, companyId: cId, targetId: pId } = parseArgs(executor, companyId, payslipId);
+  const opts = typeof executor === "number" ? payslipId : options;
 
-  if (status) {
+  const updates = ["email_status = $1", "email_sent_at = $2", "email_error_message = $3", "updated_at = NOW()"];
+  const params = [opts.email_status, opts.email_sent_at || null, opts.email_error_message || null];
+
+  if (opts.status) {
     updates.push(`status = $${params.length + 1}`);
-    params.push(status);
+    params.push(opts.status);
   }
 
-  params.push(companyId, payslipId);
+  params.push(cId, pId);
 
-  const result = await db.query(
+  const result = await dbQuery(
     `
       UPDATE payslips
       SET ${updates.join(", ")}
@@ -187,29 +200,37 @@ async function updatePayslipEmailStatus(executor = defaultQuery, companyId, pays
   return result.rows[0] || null;
 }
 
-async function updatePayslipSnapshotData(executor = defaultQuery, companyId, payslipId, snapshotData) {
-  const db = executor.query ? executor : defaultQuery;
-  const result = await db.query(
+async function updatePayslipSnapshotData(executor, companyId, payslipId, snapshotData) {
+  const { dbQuery, companyId: cId, targetId: pId } = parseArgs(executor, companyId, payslipId);
+  const targetSnap = typeof executor === "number" ? payslipId : snapshotData;
+
+  const result = await dbQuery(
     `
       UPDATE payslips
       SET snapshot_data = $1, updated_at = NOW()
       WHERE company_id = $2 AND payslip_id = $3
       RETURNING *
     `,
-    [JSON.stringify(snapshotData), companyId, payslipId]
+    [JSON.stringify(targetSnap), cId, pId]
   );
   return result.rows[0] || null;
 }
 
 async function deletePayslipsForPayrun(executor = defaultQuery, payrunId) {
-  const db = executor.query ? executor : defaultQuery;
-  // Cascades to payslip_lines
-  await db.query(`DELETE FROM payslips WHERE payrun_id = $1`, [payrunId]);
+  let dbQuery = defaultQuery;
+  let targetId = payrunId;
+  if (executor && typeof executor.query === "function") {
+    dbQuery = (sql, params) => executor.query(sql, params);
+  } else if (typeof executor === "number") {
+    targetId = executor;
+  }
+  await dbQuery(`DELETE FROM payslips WHERE payrun_id = $1`, [targetId]);
 }
 
-async function getPayslipsForPayrun(executor = defaultQuery, companyId, payrunId) {
-  const db = executor.query ? executor : defaultQuery;
-  const result = await db.query(
+async function getPayslipsForPayrun(executor, companyId, payrunId) {
+  const { dbQuery, companyId: cId, targetId: prId } = parseArgs(executor, companyId, payrunId);
+
+  const result = await dbQuery(
     `
       SELECT
         p.*,
@@ -219,37 +240,39 @@ async function getPayslipsForPayrun(executor = defaultQuery, companyId, payrunId
       WHERE p.company_id = $1 AND p.payrun_id = $2
       ORDER BY p.employee_code_snapshot ASC
     `,
-    [companyId, payrunId]
+    [cId, prId]
   );
   return result.rows;
 }
 
-async function listPayslips(executor = defaultQuery, companyId, filters = {}) {
-  const db = executor.query ? executor : defaultQuery;
-  const where = ["p.company_id = $1"];
-  const params = [companyId];
+async function listPayslips(executor, companyId, filters = {}) {
+  const { dbQuery, companyId: cId, targetId: f } = parseArgs(executor, companyId, filters);
+  const filterObj = f || {};
 
-  if (filters.payrun_id) {
-    params.push(filters.payrun_id);
+  const where = ["p.company_id = $1"];
+  const params = [cId];
+
+  if (filterObj.payrun_id) {
+    params.push(filterObj.payrun_id);
     where.push(`p.payrun_id = $${params.length}`);
   }
 
-  if (filters.employee_id) {
-    params.push(filters.employee_id);
+  if (filterObj.employee_id) {
+    params.push(filterObj.employee_id);
     where.push(`p.employee_id = $${params.length}`);
   }
 
-  if (filters.status) {
-    params.push(filters.status);
+  if (filterObj.status) {
+    params.push(filterObj.status);
     where.push(`p.status = $${params.length}`);
   }
 
-  if (filters.email_status) {
-    params.push(filters.email_status);
+  if (filterObj.email_status) {
+    params.push(filterObj.email_status);
     where.push(`p.email_status = $${params.length}`);
   }
 
-  const result = await db.query(
+  const result = await dbQuery(
     `
       SELECT
         p.*,
@@ -264,9 +287,10 @@ async function listPayslips(executor = defaultQuery, companyId, filters = {}) {
   return result.rows;
 }
 
-async function getPayslipById(executor = defaultQuery, companyId, payslipId) {
-  const db = executor.query ? executor : defaultQuery;
-  const headerResult = await db.query(
+async function getPayslipById(executor, companyId, payslipId) {
+  const { dbQuery, companyId: cId, targetId: psId } = parseArgs(executor, companyId, payslipId);
+
+  const headerResult = await dbQuery(
     `
       SELECT
         p.*,
@@ -276,20 +300,20 @@ async function getPayslipById(executor = defaultQuery, companyId, payslipId) {
       WHERE p.company_id = $1 AND p.payslip_id = $2
       LIMIT 1
     `,
-    [companyId, payslipId]
+    [cId, psId]
   );
 
   const payslip = headerResult.rows[0];
   if (!payslip) return null;
 
-  const linesResult = await db.query(
+  const linesResult = await dbQuery(
     `
       SELECT *
       FROM payslip_lines
       WHERE payslip_id = $1
       ORDER BY sequence ASC, payslip_line_id ASC
     `,
-    [payslipId]
+    [psId]
   );
 
   return {
@@ -298,9 +322,10 @@ async function getPayslipById(executor = defaultQuery, companyId, payslipId) {
   };
 }
 
-async function getPayslipsForEmployee(executor = defaultQuery, companyId, employeeId) {
-  const db = executor.query ? executor : defaultQuery;
-  const result = await db.query(
+async function getPayslipsForEmployee(executor, companyId, employeeId) {
+  const { dbQuery, companyId: cId, targetId: empId } = parseArgs(executor, companyId, employeeId);
+
+  const result = await dbQuery(
     `
       SELECT
         p.*,
@@ -310,7 +335,7 @@ async function getPayslipsForEmployee(executor = defaultQuery, companyId, employ
       WHERE p.company_id = $1 AND p.employee_id = $2
       ORDER BY p.period_start DESC, p.created_at DESC
     `,
-    [companyId, employeeId]
+    [cId, empId]
   );
   return result.rows;
 }
