@@ -148,6 +148,21 @@ CREATE TABLE IF NOT EXISTS users (
   CONSTRAINT chk_users_status CHECK (status IN ('INVITED', 'ACTIVE', 'DISABLED'))
 );
 
+CREATE TABLE IF NOT EXISTS user_sessions (
+  session_id BIGSERIAL PRIMARY KEY,
+  user_id INT NOT NULL,
+  company_id INT NOT NULL,
+  refresh_token_hash TEXT NOT NULL,
+  user_agent TEXT,
+  ip_address VARCHAR(64),
+  expires_at TIMESTAMP NOT NULL,
+  revoked_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  CONSTRAINT fk_user_sessions_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+  CONSTRAINT fk_user_sessions_company FOREIGN KEY (company_id) REFERENCES companies(company_id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS salary_structures (
   salary_structure_id SERIAL PRIMARY KEY,
   company_id INT NOT NULL,
@@ -510,6 +525,12 @@ ON CONFLICT (role_name) DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS idx_users_company_id ON users(company_id);
 CREATE INDEX IF NOT EXISTS idx_users_role_id ON users(role_id);
+CREATE INDEX IF NOT EXISTS idx_users_status_company ON users(company_id, status);
+CREATE INDEX IF NOT EXISTS idx_users_invitation_expires ON users(invitation_expires_at);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_company ON user_sessions(company_id);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_refresh_hash ON user_sessions(refresh_token_hash);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_active ON user_sessions(user_id, revoked_at, expires_at);
 CREATE INDEX IF NOT EXISTS idx_departments_company_id ON departments(company_id);
 CREATE INDEX IF NOT EXISTS idx_positions_company_id ON positions(company_id);
 CREATE INDEX IF NOT EXISTS idx_employees_company_id ON employees(company_id);
@@ -535,25 +556,197 @@ ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO permissions (module, action)
 VALUES
-  ('AUTH', 'LOGIN'),
-  ('AUTH', 'INVITE'),
-  ('EMPLOYEE', 'CREATE'),
-  ('EMPLOYEE', 'READ'),
-  ('EMPLOYEE', 'UPDATE'),
-  ('CONTRACT', 'CREATE'),
-  ('CONTRACT', 'READ'),
-  ('CONTRACT', 'UPDATE'),
+  ('DASHBOARD', 'READ'),
+  ('USERS', 'CREATE'),
+  ('USERS', 'READ'),
+  ('USERS', 'UPDATE'),
+  ('USERS', 'DELETE'),
+  ('USERS', 'APPROVE'),
+  ('USERS', 'REFUSE'),
+  ('USERS', 'PROCESS'),
+  ('USERS', 'VALIDATE'),
+  ('USERS', 'PAY'),
+  ('USERS', 'EXPORT'),
+  ('ROLES', 'CREATE'),
+  ('ROLES', 'READ'),
+  ('ROLES', 'UPDATE'),
+  ('ROLES', 'DELETE'),
+  ('ROLES', 'APPROVE'),
+  ('ROLES', 'REFUSE'),
+  ('ROLES', 'PROCESS'),
+  ('ROLES', 'VALIDATE'),
+  ('ROLES', 'PAY'),
+  ('ROLES', 'EXPORT'),
+  ('EMPLOYEES', 'CREATE'),
+  ('EMPLOYEES', 'READ'),
+  ('EMPLOYEES', 'UPDATE'),
+  ('EMPLOYEES', 'DELETE'),
+  ('EMPLOYEES', 'APPROVE'),
+  ('EMPLOYEES', 'REFUSE'),
+  ('EMPLOYEES', 'PROCESS'),
+  ('EMPLOYEES', 'VALIDATE'),
+  ('EMPLOYEES', 'PAY'),
+  ('EMPLOYEES', 'EXPORT'),
+  ('DEPARTMENTS', 'CREATE'),
+  ('DEPARTMENTS', 'READ'),
+  ('DEPARTMENTS', 'UPDATE'),
+  ('DEPARTMENTS', 'DELETE'),
+  ('DEPARTMENTS', 'APPROVE'),
+  ('DEPARTMENTS', 'REFUSE'),
+  ('DEPARTMENTS', 'PROCESS'),
+  ('DEPARTMENTS', 'VALIDATE'),
+  ('DEPARTMENTS', 'PAY'),
+  ('DEPARTMENTS', 'EXPORT'),
+  ('POSITIONS', 'CREATE'),
+  ('POSITIONS', 'READ'),
+  ('POSITIONS', 'UPDATE'),
+  ('POSITIONS', 'DELETE'),
+  ('POSITIONS', 'APPROVE'),
+  ('POSITIONS', 'REFUSE'),
+  ('POSITIONS', 'PROCESS'),
+  ('POSITIONS', 'VALIDATE'),
+  ('POSITIONS', 'PAY'),
+  ('POSITIONS', 'EXPORT'),
+  ('CONTRACTS', 'CREATE'),
+  ('CONTRACTS', 'READ'),
+  ('CONTRACTS', 'UPDATE'),
+  ('CONTRACTS', 'DELETE'),
+  ('CONTRACTS', 'APPROVE'),
+  ('CONTRACTS', 'REFUSE'),
+  ('CONTRACTS', 'PROCESS'),
+  ('CONTRACTS', 'VALIDATE'),
+  ('CONTRACTS', 'PAY'),
+  ('CONTRACTS', 'EXPORT'),
+  ('WORKING_SCHEDULES', 'CREATE'),
+  ('WORKING_SCHEDULES', 'READ'),
+  ('WORKING_SCHEDULES', 'UPDATE'),
+  ('WORKING_SCHEDULES', 'DELETE'),
+  ('WORKING_SCHEDULES', 'APPROVE'),
+  ('WORKING_SCHEDULES', 'REFUSE'),
+  ('WORKING_SCHEDULES', 'PROCESS'),
+  ('WORKING_SCHEDULES', 'VALIDATE'),
+  ('WORKING_SCHEDULES', 'PAY'),
+  ('WORKING_SCHEDULES', 'EXPORT'),
   ('ATTENDANCE', 'CREATE'),
   ('ATTENDANCE', 'READ'),
   ('ATTENDANCE', 'UPDATE'),
-  ('LEAVE', 'CREATE'),
-  ('LEAVE', 'READ'),
-  ('LEAVE', 'APPROVE'),
-  ('PAYROLL', 'CREATE'),
-  ('PAYROLL', 'READ'),
-  ('PAYROLL', 'VALIDATE'),
-  ('PAYROLL', 'PAY'),
-  ('REPORTS', 'READ')
+  ('ATTENDANCE', 'DELETE'),
+  ('ATTENDANCE', 'APPROVE'),
+  ('ATTENDANCE', 'REFUSE'),
+  ('ATTENDANCE', 'PROCESS'),
+  ('ATTENDANCE', 'VALIDATE'),
+  ('ATTENDANCE', 'PAY'),
+  ('ATTENDANCE', 'EXPORT'),
+  ('ATTENDANCE_POLICIES', 'CREATE'),
+  ('ATTENDANCE_POLICIES', 'READ'),
+  ('ATTENDANCE_POLICIES', 'UPDATE'),
+  ('ATTENDANCE_POLICIES', 'DELETE'),
+  ('ATTENDANCE_POLICIES', 'APPROVE'),
+  ('ATTENDANCE_POLICIES', 'REFUSE'),
+  ('ATTENDANCE_POLICIES', 'PROCESS'),
+  ('ATTENDANCE_POLICIES', 'VALIDATE'),
+  ('ATTENDANCE_POLICIES', 'PAY'),
+  ('ATTENDANCE_POLICIES', 'EXPORT'),
+  ('LEAVE_TYPES', 'CREATE'),
+  ('LEAVE_TYPES', 'READ'),
+  ('LEAVE_TYPES', 'UPDATE'),
+  ('LEAVE_TYPES', 'DELETE'),
+  ('LEAVE_TYPES', 'APPROVE'),
+  ('LEAVE_TYPES', 'REFUSE'),
+  ('LEAVE_TYPES', 'PROCESS'),
+  ('LEAVE_TYPES', 'VALIDATE'),
+  ('LEAVE_TYPES', 'PAY'),
+  ('LEAVE_TYPES', 'EXPORT'),
+  ('LEAVE_ALLOCATIONS', 'CREATE'),
+  ('LEAVE_ALLOCATIONS', 'READ'),
+  ('LEAVE_ALLOCATIONS', 'UPDATE'),
+  ('LEAVE_ALLOCATIONS', 'DELETE'),
+  ('LEAVE_ALLOCATIONS', 'APPROVE'),
+  ('LEAVE_ALLOCATIONS', 'REFUSE'),
+  ('LEAVE_ALLOCATIONS', 'PROCESS'),
+  ('LEAVE_ALLOCATIONS', 'VALIDATE'),
+  ('LEAVE_ALLOCATIONS', 'PAY'),
+  ('LEAVE_ALLOCATIONS', 'EXPORT'),
+  ('LEAVE_REQUESTS', 'CREATE'),
+  ('LEAVE_REQUESTS', 'READ'),
+  ('LEAVE_REQUESTS', 'UPDATE'),
+  ('LEAVE_REQUESTS', 'DELETE'),
+  ('LEAVE_REQUESTS', 'APPROVE'),
+  ('LEAVE_REQUESTS', 'REFUSE'),
+  ('LEAVE_REQUESTS', 'PROCESS'),
+  ('LEAVE_REQUESTS', 'VALIDATE'),
+  ('LEAVE_REQUESTS', 'PAY'),
+  ('LEAVE_REQUESTS', 'EXPORT'),
+  ('SALARY_STRUCTURES', 'CREATE'),
+  ('SALARY_STRUCTURES', 'READ'),
+  ('SALARY_STRUCTURES', 'UPDATE'),
+  ('SALARY_STRUCTURES', 'DELETE'),
+  ('SALARY_STRUCTURES', 'APPROVE'),
+  ('SALARY_STRUCTURES', 'REFUSE'),
+  ('SALARY_STRUCTURES', 'PROCESS'),
+  ('SALARY_STRUCTURES', 'VALIDATE'),
+  ('SALARY_STRUCTURES', 'PAY'),
+  ('SALARY_STRUCTURES', 'EXPORT'),
+  ('SALARY_RULES', 'CREATE'),
+  ('SALARY_RULES', 'READ'),
+  ('SALARY_RULES', 'UPDATE'),
+  ('SALARY_RULES', 'DELETE'),
+  ('SALARY_RULES', 'APPROVE'),
+  ('SALARY_RULES', 'REFUSE'),
+  ('SALARY_RULES', 'PROCESS'),
+  ('SALARY_RULES', 'VALIDATE'),
+  ('SALARY_RULES', 'PAY'),
+  ('SALARY_RULES', 'EXPORT'),
+  ('PAYRUNS', 'CREATE'),
+  ('PAYRUNS', 'READ'),
+  ('PAYRUNS', 'UPDATE'),
+  ('PAYRUNS', 'DELETE'),
+  ('PAYRUNS', 'APPROVE'),
+  ('PAYRUNS', 'REFUSE'),
+  ('PAYRUNS', 'PROCESS'),
+  ('PAYRUNS', 'VALIDATE'),
+  ('PAYRUNS', 'PAY'),
+  ('PAYRUNS', 'EXPORT'),
+  ('PAYSLIPS', 'CREATE'),
+  ('PAYSLIPS', 'READ'),
+  ('PAYSLIPS', 'UPDATE'),
+  ('PAYSLIPS', 'DELETE'),
+  ('PAYSLIPS', 'APPROVE'),
+  ('PAYSLIPS', 'REFUSE'),
+  ('PAYSLIPS', 'PROCESS'),
+  ('PAYSLIPS', 'VALIDATE'),
+  ('PAYSLIPS', 'PAY'),
+  ('PAYSLIPS', 'EXPORT'),
+  ('REPORTS', 'CREATE'),
+  ('REPORTS', 'READ'),
+  ('REPORTS', 'UPDATE'),
+  ('REPORTS', 'DELETE'),
+  ('REPORTS', 'APPROVE'),
+  ('REPORTS', 'REFUSE'),
+  ('REPORTS', 'PROCESS'),
+  ('REPORTS', 'VALIDATE'),
+  ('REPORTS', 'PAY'),
+  ('REPORTS', 'EXPORT'),
+  ('COMPANY_SETTINGS', 'CREATE'),
+  ('COMPANY_SETTINGS', 'READ'),
+  ('COMPANY_SETTINGS', 'UPDATE'),
+  ('COMPANY_SETTINGS', 'DELETE'),
+  ('COMPANY_SETTINGS', 'APPROVE'),
+  ('COMPANY_SETTINGS', 'REFUSE'),
+  ('COMPANY_SETTINGS', 'PROCESS'),
+  ('COMPANY_SETTINGS', 'VALIDATE'),
+  ('COMPANY_SETTINGS', 'PAY'),
+  ('COMPANY_SETTINGS', 'EXPORT'),
+  ('AUDIT_LOGS', 'CREATE'),
+  ('AUDIT_LOGS', 'READ'),
+  ('AUDIT_LOGS', 'UPDATE'),
+  ('AUDIT_LOGS', 'DELETE'),
+  ('AUDIT_LOGS', 'APPROVE'),
+  ('AUDIT_LOGS', 'REFUSE'),
+  ('AUDIT_LOGS', 'PROCESS'),
+  ('AUDIT_LOGS', 'VALIDATE'),
+  ('AUDIT_LOGS', 'PAY'),
+  ('AUDIT_LOGS', 'EXPORT')
 ON CONFLICT (module, action) DO NOTHING;
 
 INSERT INTO role_permissions (role_id, permission_id, scope)
@@ -567,8 +760,22 @@ INSERT INTO role_permissions (role_id, permission_id, scope)
 SELECT r.role_id, p.permission_id, 'ALL'
 FROM roles r
 JOIN permissions p
-  ON (p.module IN ('EMPLOYEE', 'CONTRACT', 'ATTENDANCE', 'LEAVE', 'REPORTS')
-      OR (p.module = 'PAYROLL' AND p.action = 'READ'))
+  ON (
+    (p.module = 'DASHBOARD' AND p.action = 'READ') OR
+    (p.module = 'USERS' AND p.action IN ('READ')) OR
+    (p.module = 'EMPLOYEES' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'DELETE', 'EXPORT')) OR
+    (p.module = 'DEPARTMENTS' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'DELETE')) OR
+    (p.module = 'POSITIONS' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'DELETE')) OR
+    (p.module = 'CONTRACTS' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'DELETE', 'VALIDATE')) OR
+    (p.module = 'WORKING_SCHEDULES' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'DELETE')) OR
+    (p.module = 'ATTENDANCE' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'APPROVE', 'REFUSE', 'EXPORT')) OR
+    (p.module = 'ATTENDANCE_POLICIES' AND p.action IN ('READ')) OR
+    (p.module = 'LEAVE_TYPES' AND p.action IN ('READ')) OR
+    (p.module = 'LEAVE_ALLOCATIONS' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'APPROVE', 'REFUSE')) OR
+    (p.module = 'LEAVE_REQUESTS' AND p.action IN ('READ', 'APPROVE', 'REFUSE', 'EXPORT')) OR
+    (p.module = 'PAYSLIPS' AND p.action IN ('READ')) OR
+    (p.module = 'REPORTS' AND p.action IN ('READ', 'EXPORT'))
+  )
 WHERE r.role_name = 'HR Manager'
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
@@ -576,7 +783,19 @@ INSERT INTO role_permissions (role_id, permission_id, scope)
 SELECT r.role_id, p.permission_id, 'ALL'
 FROM roles r
 JOIN permissions p
-  ON p.module IN ('PAYROLL', 'REPORTS', 'EMPLOYEE', 'CONTRACT')
+  ON (
+    (p.module = 'DASHBOARD' AND p.action = 'READ') OR
+    (p.module = 'USERS' AND p.action IN ('READ')) OR
+    (p.module = 'EMPLOYEES' AND p.action IN ('READ', 'EXPORT')) OR
+    (p.module = 'CONTRACTS' AND p.action IN ('READ')) OR
+    (p.module = 'SALARY_STRUCTURES' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'DELETE', 'VALIDATE')) OR
+    (p.module = 'SALARY_RULES' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'DELETE', 'VALIDATE')) OR
+    (p.module = 'PAYRUNS' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'DELETE', 'PROCESS', 'VALIDATE', 'PAY', 'EXPORT')) OR
+    (p.module = 'PAYSLIPS' AND p.action IN ('CREATE', 'READ', 'UPDATE', 'PROCESS', 'VALIDATE', 'PAY', 'EXPORT')) OR
+    (p.module = 'ATTENDANCE' AND p.action IN ('READ')) OR
+    (p.module = 'LEAVE_REQUESTS' AND p.action IN ('READ')) OR
+    (p.module = 'REPORTS' AND p.action IN ('READ', 'EXPORT'))
+  )
 WHERE r.role_name = 'Payroll Manager'
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
@@ -584,7 +803,14 @@ INSERT INTO role_permissions (role_id, permission_id, scope)
 SELECT r.role_id, p.permission_id, 'OWN'
 FROM roles r
 JOIN permissions p
-  ON p.module IN ('PAYROLL', 'REPORTS', 'EMPLOYEE', 'CONTRACT')
+  ON (
+    (p.module = 'DASHBOARD' AND p.action = 'READ') OR
+    (p.module = 'EMPLOYEES' AND p.action IN ('READ')) OR
+    (p.module = 'CONTRACTS' AND p.action IN ('READ')) OR
+    (p.module = 'PAYRUNS' AND p.action IN ('CREATE', 'READ', 'PROCESS')) OR
+    (p.module = 'PAYSLIPS' AND p.action IN ('READ', 'PROCESS', 'EXPORT')) OR
+    (p.module = 'REPORTS' AND p.action IN ('READ'))
+  )
 WHERE r.role_name = 'Payroll User'
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
@@ -592,7 +818,14 @@ INSERT INTO role_permissions (role_id, permission_id, scope)
 SELECT r.role_id, p.permission_id, 'OWN'
 FROM roles r
 JOIN permissions p
-  ON p.module IN ('AUTH', 'ATTENDANCE', 'LEAVE', 'REPORTS')
+  ON (
+    (p.module = 'DASHBOARD' AND p.action = 'READ') OR
+    (p.module = 'EMPLOYEES' AND p.action IN ('READ', 'UPDATE')) OR
+    (p.module = 'ATTENDANCE' AND p.action IN ('READ')) OR
+    (p.module = 'LEAVE_REQUESTS' AND p.action IN ('CREATE', 'READ', 'UPDATE')) OR
+    (p.module = 'LEAVE_ALLOCATIONS' AND p.action IN ('READ')) OR
+    (p.module = 'PAYSLIPS' AND p.action IN ('READ', 'EXPORT'))
+  )
 WHERE r.role_name = 'Employee'
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 

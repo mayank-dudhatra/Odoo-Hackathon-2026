@@ -1,0 +1,24 @@
+function parseIntOrDefault(value, defaultValue) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : defaultValue;
+}
+
+const env = {
+  nodeEnv: process.env.NODE_ENV || "development",
+  port: parseIntOrDefault(process.env.PORT, 5000),
+  accessTokenSecret: process.env.ACCESS_TOKEN_SECRET || "",
+  accessTokenTtl: process.env.ACCESS_TOKEN_TTL || "15m",
+  refreshTokenSecret: process.env.REFRESH_TOKEN_SECRET || "",
+  refreshTokenTtlDays: parseIntOrDefault(process.env.REFRESH_TOKEN_TTL_DAYS, 7),
+  invitationTtlHours: parseIntOrDefault(process.env.INVITATION_TTL_HOURS, 48),
+  bcryptRounds: parseIntOrDefault(process.env.BCRYPT_ROUNDS, 12),
+  frontendBaseUrl: process.env.FRONTEND_BASE_URL || "http://localhost:5173",
+};
+
+if (!env.accessTokenSecret || !env.refreshTokenSecret) {
+  throw new Error(
+    "Missing ACCESS_TOKEN_SECRET or REFRESH_TOKEN_SECRET in environment variables."
+  );
+}
+
+module.exports = { env };
