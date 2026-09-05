@@ -86,6 +86,11 @@ export interface AttendancePolicy {
   early_leave_grace_minutes: number;
   early_leave_penalty: DeductionType;
   stack_deductions: boolean;
+  paid_leave_days_count?: number;
+  sick_leave_days_count?: number;
+  casual_leave_days_count?: number;
+  max_unexcused_absences?: number;
+  leave_type_quotas?: Record<string, number>;
   is_active: boolean;
   created_at: string;
   updated_at: string;

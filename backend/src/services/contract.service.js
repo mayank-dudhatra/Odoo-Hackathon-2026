@@ -46,6 +46,7 @@ async function ensureCompanySalaryStructure(companyId, salaryStructureId) {
 }
 
 async function ensureCompanyEmployee(companyId, employeeId) {
+  if (!employeeId) return null;
   const employee = await getEmployeeById(companyId, employeeId);
   if (!employee) {
     throw new AppError(400, "Employee must belong to the same company", "CROSS_COMPANY_REFERENCE");
@@ -72,10 +73,12 @@ async function ensureCompanyPosition(companyId, positionId) {
 }
 
 async function lockEmployeeContractScope(client, companyId, employeeId) {
+  if (!employeeId) return;
   await client.query(`SELECT pg_advisory_xact_lock($1, $2)`, [companyId, employeeId]);
 }
 
 async function checkOverlap(companyId, employeeId, startDate, endDate, ignoreContractId = null, client = null) {
+  if (!employeeId) return;
   const executor = client || { query };
   const sDate = normalizeDateStr(startDate);
   const eDate = normalizeDateStr(endDate);
@@ -100,7 +103,7 @@ async function checkOverlap(companyId, employeeId, startDate, endDate, ignoreCon
 }
 
 async function maybeActivateEmployeeSchedule(companyId, employeeId, scheduleId, startDate, status, client) {
-  if (status !== "ACTIVE" || !scheduleId) return;
+  if (!employeeId || status !== "ACTIVE" || !scheduleId) return;
   const sDate = normalizeDateStr(startDate);
   const today = new Date().toISOString().slice(0, 10);
   if (sDate <= today) {
@@ -140,22 +143,27 @@ async function createCompanyContract(auth, payload) {
       throw new AppError(400, "End date must be on or after start date", "INVALID_CONTRACT_DATES");
     }
 
-    await lockEmployeeContractScope(client, auth.company_id, payload.employee_id);
-    const employee = await ensureCompanyEmployee(auth.company_id, payload.employee_id);
+    const employeeId = payload.employee_id || null;
+
+    if (employeeId) {
+      await lockEmployeeContractScope(client, auth.company_id, employeeId);
+      await ensureCompanyEmployee(auth.company_id, employeeId);
+    }
     await ensureCompanyDepartment(auth.company_id, payload.department_id || null);
     await ensureCompanyPosition(auth.company_id, payload.position_id || null);
     await ensureCompanySchedule(auth.company_id, payload.schedule_id || null);
     await ensureCompanySalaryStructure(auth.company_id, payload.salary_structure_id);
 
     const status = payload.status || "DRAFT";
-    if (status === "ACTIVE") {
-      await checkOverlap(auth.company_id, payload.employee_id, startDate, endDate, null, client);
+    if (status === "ACTIVE" && employeeId) {
+      await checkOverlap(auth.company_id, employeeId, startDate, endDate, null, client);
     }
 
     const contractId = await createContract(
       auth.company_id,
       {
         ...payload,
+        employee_id: employeeId,
         start_date: startDate,
         end_date: endDate || null,
         status,
@@ -164,14 +172,16 @@ async function createCompanyContract(auth, payload) {
       client
     );
 
-    await maybeActivateEmployeeSchedule(
-      auth.company_id,
-      payload.employee_id,
-      payload.schedule_id || employee.schedule_id || null,
-      startDate,
-      status,
-      client
-    );
+    if (employeeId) {
+      await maybeActivateEmployeeSchedule(
+        auth.company_id,
+        employeeId,
+        payload.schedule_id || null,
+        startDate,
+        status,
+        client
+      );
+    }
 
     await createAuditLog({
       companyId: auth.company_id,
@@ -197,7 +207,7 @@ async function updateCompanyContract(auth, contractId, payload) {
       throw new AppError(404, "Contract not found", "CONTRACT_NOT_FOUND");
     }
 
-    const nextEmployeeId = payload.employee_id !== undefined ? payload.employee_id : current.employee_id;
+    const nextEmployeeId = payload.employee_id !== undefined ? (payload.employee_id || null) : current.employee_id;
     if (nextEmployeeId) {
       await lockEmployeeContractScope(client, auth.company_id, nextEmployeeId);
       await ensureCompanyEmployee(auth.company_id, nextEmployeeId);

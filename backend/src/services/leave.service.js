@@ -55,23 +55,7 @@ async function createLeaveTypeService(companyId, payload, actorUserId) {
   return leaveType;
 }
 
-async function ensureDefaultLeaveTypes(companyId) {
-  const existing = await listLeaveTypes(null, companyId, {});
-  if (existing.length === 0) {
-    const defaultTypes = [
-      { name: "Paid Time Off (PTO)", unit: "DAYS", requires_allocation: true, is_paid: true, default_days_year: 20, approval_required: true, payroll_integration: true, is_active: true },
-      { name: "Sick Leave", unit: "DAYS", requires_allocation: true, is_paid: true, default_days_year: 10, approval_required: true, payroll_integration: true, is_active: true },
-      { name: "Casual Leave", unit: "DAYS", requires_allocation: true, is_paid: true, default_days_year: 7, approval_required: true, payroll_integration: true, is_active: true },
-      { name: "Unpaid Leave", unit: "DAYS", requires_allocation: false, is_paid: false, default_days_year: 0, approval_required: true, payroll_integration: true, is_active: true },
-    ];
-    for (const dt of defaultTypes) {
-      await createLeaveType(null, { company_id: companyId, ...dt });
-    }
-  }
-}
-
 async function listLeaveTypesService(companyId, filters) {
-  await ensureDefaultLeaveTypes(companyId);
   return listLeaveTypes(null, companyId, filters);
 }
 
@@ -202,7 +186,6 @@ async function getEmployeeLeaveBalancesService(companyId, employeeId, year = new
     throw new AppError(404, "Employee not found", "EMPLOYEE_NOT_FOUND");
   }
 
-  await ensureDefaultLeaveTypes(companyId);
   const leaveTypes = await listLeaveTypes(null, companyId, { is_active: true });
   let allocations = await listAllocations(null, companyId, { employee_id: employeeId, year: Number(year), status: "APPROVED" });
 

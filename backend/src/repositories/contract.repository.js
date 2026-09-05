@@ -43,7 +43,7 @@ async function listContracts(companyId, filters = {}, client = null) {
         c.created_at,
         c.updated_at
       FROM contracts c
-      JOIN employees e ON e.employee_id = c.employee_id
+      LEFT JOIN employees e ON e.employee_id = c.employee_id
       LEFT JOIN positions p ON p.position_id = c.position_id
       LEFT JOIN departments d ON d.department_id = c.department_id
       LEFT JOIN working_schedules s ON s.schedule_id = c.schedule_id
@@ -90,7 +90,7 @@ async function getContractById(companyId, contractId, client = null) {
         c.created_at,
         c.updated_at
       FROM contracts c
-      JOIN employees e ON e.employee_id = c.employee_id
+      LEFT JOIN employees e ON e.employee_id = c.employee_id
       LEFT JOIN positions p ON p.position_id = c.position_id
       LEFT JOIN departments d ON d.department_id = c.department_id
       LEFT JOIN working_schedules s ON s.schedule_id = c.schedule_id
@@ -159,7 +159,7 @@ async function createContract(companyId, payload, client = null) {
     `,
     [
       companyId,
-      payload.employee_id,
+      payload.employee_id || null,
       payload.position_id || null,
       payload.department_id || null,
       payload.schedule_id || null,

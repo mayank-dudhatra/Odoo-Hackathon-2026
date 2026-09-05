@@ -14,7 +14,7 @@ const dateStringSchema = z.preprocess((val) => {
 }, z.string().regex(/^\d{4}-\d{2}-\d{2}$/));
 
 const contractSchema = z.object({
-  employee_id: z.coerce.number().int().positive(),
+  employee_id: z.coerce.number().int().positive().nullable().optional(),
   position_id: z.coerce.number().int().positive().nullable().optional(),
   department_id: z.coerce.number().int().positive().nullable().optional(),
   schedule_id: z.coerce.number().int().positive().nullable().optional(),
@@ -26,7 +26,7 @@ const contractSchema = z.object({
   status: z.enum(["DRAFT", "ACTIVE", "EXPIRED", "TERMINATED"]).optional(),
 });
 
-const contractUpdateSchema = contractSchema.partial().omit({ employee_id: true });
+const contractUpdateSchema = contractSchema.partial();
 
 const contractStatusSchema = z.object({
   status: z.enum(["DRAFT", "ACTIVE", "EXPIRED", "TERMINATED"]),

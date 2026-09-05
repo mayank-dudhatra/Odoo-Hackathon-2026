@@ -164,22 +164,7 @@ export const TimeOffPage: React.FC = () => {
     return <Badge variant={s.variant}>{s.label}</Badge>;
   };
 
-  const displayBalances: LeaveBalance[] =
-    balances.length > 0
-      ? balances
-      : leaveTypes.map((lt) => ({
-          leave_type_id: lt.leave_type_id,
-          leave_type_name: lt.name,
-          unit: lt.unit,
-          requires_allocation: lt.requires_allocation,
-          is_paid: lt.is_paid,
-          payroll_integration: lt.payroll_integration,
-          year: new Date().getFullYear(),
-          allocated_days: lt.requires_allocation ? 14 : 30,
-          used_days: 0,
-          remaining_days: lt.requires_allocation ? 14 : 30,
-          allocation_status: 'APPROVED',
-        }));
+  const displayBalances: LeaveBalance[] = balances;
 
   const totalAllocated = displayBalances.reduce((sum, b) => sum + (Number(b.allocated_days) || 0), 0);
   const totalUsed = displayBalances.reduce((sum, b) => sum + (Number(b.used_days) || 0), 0);
@@ -274,36 +259,42 @@ export const TimeOffPage: React.FC = () => {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {displayBalances.map((b) => (
-            <div
-              key={b.leave_type_id}
-              className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-4 hover:border-[#2563EB]/40 transition-colors space-y-3"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-[#0F172A] text-sm truncate">{b.leave_type_name}</span>
-                <Badge variant={b.is_paid ? 'success' : 'warning'}>
-                  {b.is_paid ? 'Paid' : 'Unpaid'}
-                </Badge>
-              </div>
+        {displayBalances.length === 0 ? (
+          <div className="p-6 text-center text-sm text-[#64748B] bg-[#F8FAFC] rounded-lg border border-dashed border-[#CBD5E1]">
+            No leave types or balance quotas configured for your company yet. Company Admin can add Leave Types under the <strong>Leave Types</strong> tab.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {displayBalances.map((b) => (
+              <div
+                key={b.leave_type_id}
+                className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-4 hover:border-[#2563EB]/40 transition-colors space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-[#0F172A] text-sm truncate">{b.leave_type_name}</span>
+                  <Badge variant={b.is_paid ? 'success' : 'warning'}>
+                    {b.is_paid ? 'Paid' : 'Unpaid'}
+                  </Badge>
+                </div>
 
-              <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                <div className="bg-white p-2 rounded-lg border border-[#E2E8F0]">
-                  <span className="text-[#64748B]">Allocated</span>
-                  <div className="font-bold text-[#0F172A] mt-0.5">{b.allocated_days ?? '∞'}d</div>
-                </div>
-                <div className="bg-white p-2 rounded-lg border border-[#E2E8F0]">
-                  <span className="text-[#64748B]">Used</span>
-                  <div className="font-bold text-[#DC2626] mt-0.5">{b.used_days ?? 0}d</div>
-                </div>
-                <div className="bg-blue-50 p-2 rounded-lg border border-blue-100">
-                  <span className="text-[#1E40AF]">Available</span>
-                  <div className="font-bold text-[#2563EB] mt-0.5">{b.remaining_days ?? '∞'}d</div>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="bg-white p-2 rounded-lg border border-[#E2E8F0]">
+                    <span className="text-[#64748B]">Allocated</span>
+                    <div className="font-bold text-[#0F172A] mt-0.5">{b.allocated_days ?? '∞'}d</div>
+                  </div>
+                  <div className="bg-white p-2 rounded-lg border border-[#E2E8F0]">
+                    <span className="text-[#64748B]">Used</span>
+                    <div className="font-bold text-[#DC2626] mt-0.5">{b.used_days ?? 0}d</div>
+                  </div>
+                  <div className="bg-blue-50 p-2 rounded-lg border border-blue-100">
+                    <span className="text-[#1E40AF]">Available</span>
+                    <div className="font-bold text-[#2563EB] mt-0.5">{b.remaining_days ?? '∞'}d</div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Tabs */}

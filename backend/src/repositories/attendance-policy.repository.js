@@ -26,6 +26,11 @@ async function listAttendancePolicies(companyId, filters = {}, client = null) {
         early_leave_grace_minutes,
         early_leave_penalty,
         stack_deductions,
+        paid_leave_days_count,
+        sick_leave_days_count,
+        casual_leave_days_count,
+        max_unexcused_absences,
+        leave_type_quotas,
         is_active,
         created_at,
         updated_at
@@ -53,6 +58,11 @@ async function getAttendancePolicyById(companyId, policyId, client = null) {
         early_leave_grace_minutes,
         early_leave_penalty,
         stack_deductions,
+        paid_leave_days_count,
+        sick_leave_days_count,
+        casual_leave_days_count,
+        max_unexcused_absences,
+        leave_type_quotas,
         is_active,
         created_at,
         updated_at
@@ -80,6 +90,11 @@ async function getDefaultAttendancePolicy(companyId, client = null) {
         early_leave_grace_minutes,
         early_leave_penalty,
         stack_deductions,
+        paid_leave_days_count,
+        sick_leave_days_count,
+        casual_leave_days_count,
+        max_unexcused_absences,
+        leave_type_quotas,
         is_active,
         created_at,
         updated_at
@@ -107,9 +122,14 @@ async function createAttendancePolicy(companyId, payload, client = null) {
         early_leave_grace_minutes,
         early_leave_penalty,
         stack_deductions,
+        paid_leave_days_count,
+        sick_leave_days_count,
+        casual_leave_days_count,
+        max_unexcused_absences,
+        leave_type_quotas,
         is_active
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, true))
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, COALESCE($15, true))
       RETURNING *
     `,
     [
@@ -122,6 +142,11 @@ async function createAttendancePolicy(companyId, payload, client = null) {
       payload.early_leave_grace_minutes ?? 0,
       payload.early_leave_penalty || "NONE",
       payload.stack_deductions ?? false,
+      payload.paid_leave_days_count ?? 20,
+      payload.sick_leave_days_count ?? 10,
+      payload.casual_leave_days_count ?? 7,
+      payload.max_unexcused_absences ?? 3,
+      JSON.stringify(payload.leave_type_quotas || {}),
       payload.is_active,
     ]
   );
@@ -135,7 +160,7 @@ async function updateAttendancePolicy(companyId, policyId, payload, client = nul
 
   for (const [key, value] of Object.entries(payload)) {
     fields.push(`${key} = $${values.length + 1}`);
-    values.push(value);
+    values.push(key === "leave_type_quotas" && typeof value === "object" && value !== null ? JSON.stringify(value) : value);
   }
 
   if (!fields.length) {

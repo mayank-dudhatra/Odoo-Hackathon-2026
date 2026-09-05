@@ -178,8 +178,14 @@ export const ContractsPage: React.FC = () => {
                       </button>
                     </td>
                     <td className="py-3.5 px-4 font-medium text-[#0F172A]">
-                      <div>{c.employee_name || `${c.employee_first_name || ''} ${c.employee_last_name || ''}`}</div>
-                      <div className="text-xs text-[#64748B] font-normal">{c.employee_code}</div>
+                      {c.employee_name && c.employee_name.trim() !== '' ? (
+                        <>
+                          <div>{c.employee_name}</div>
+                          <div className="text-xs text-[#64748B] font-normal">{c.employee_code}</div>
+                        </>
+                      ) : (
+                        <Badge variant="neutral">Unassigned / Template</Badge>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 text-[#475569]">
                       <div>{c.department_name || '—'}</div>

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Edit2, Trash2, ShieldCheck } from 'lucide-react';
 import { attendanceApi } from '../../api/attendance.api';
+import { leaveApi } from '../../api/leave.api';
 import type { AttendancePolicy, PenaltyType } from '../../types/attendance';
+import type { LeaveType } from '../../types/leave';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
 import { Input } from '../../components/common/Input';
@@ -15,6 +17,7 @@ export const AttendancePoliciesPage: React.FC = () => {
   const isAdmin = role === 'Admin';
 
   const [policies, setPolicies] = useState<AttendancePolicy[]>([]);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'true' | 'false' | 'all'>('true');
@@ -29,6 +32,8 @@ export const AttendancePoliciesPage: React.FC = () => {
   const [beyondGracePenalty, setBeyondGracePenalty] = useState<PenaltyType>('HALF_DAY');
   const [earlyLeaveGrace, setEarlyLeaveGrace] = useState(15);
   const [earlyLeavePenalty, setEarlyLeavePenalty] = useState<PenaltyType>('HALF_DAY');
+  const [maxUnexcused, setMaxUnexcused] = useState(3);
+  const [leaveQuotas, setLeaveQuotas] = useState<Record<number, number>>({});
   const [stackDeductions, setStackDeductions] = useState(false);
   const [isActive, setIsActive] = useState(true);
   const [modalLoading, setModalLoading] = useState(false);
@@ -46,8 +51,12 @@ export const AttendancePoliciesPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await attendanceApi.listPolicies({ is_active: statusFilter });
-      setPolicies(data);
+      const [policiesData, typesData] = await Promise.all([
+        attendanceApi.listPolicies({ is_active: statusFilter }),
+        leaveApi.listLeaveTypes().catch(() => []),
+      ]);
+      setPolicies(policiesData);
+      setLeaveTypes(typesData);
     } catch (err: any) {
       setError(err?.response?.data?.message || err.message || 'Failed to fetch attendance policies');
     } finally {
@@ -60,6 +69,17 @@ export const AttendancePoliciesPage: React.FC = () => {
   }, [fetchPolicies]);
 
   const handleOpenModal = (policy?: AttendancePolicy) => {
+    const initialQuotas: Record<number, number> = {};
+    leaveTypes.forEach((lt) => {
+      if (policy && policy.leave_type_quotas) {
+        const val = policy.leave_type_quotas[lt.leave_type_id] ?? policy.leave_type_quotas[String(lt.leave_type_id)];
+        initialQuotas[lt.leave_type_id] = val !== undefined ? Number(val) : 0;
+      } else {
+        initialQuotas[lt.leave_type_id] = Number(lt.default_days_year) || 0;
+      }
+    });
+    setLeaveQuotas(initialQuotas);
+
     if (policy) {
       setSelectedPolicy(policy);
       setName(policy.name);
@@ -69,6 +89,7 @@ export const AttendancePoliciesPage: React.FC = () => {
       setBeyondGracePenalty(policy.beyond_grace_penalty ?? 'HALF_DAY');
       setEarlyLeaveGrace(policy.early_leave_grace_minutes ?? 15);
       setEarlyLeavePenalty(policy.early_leave_penalty ?? 'HALF_DAY');
+      setMaxUnexcused(policy.max_unexcused_absences ?? 3);
       setStackDeductions(policy.stack_deductions ?? false);
       setIsActive(policy.is_active ?? true);
     } else {
@@ -80,6 +101,7 @@ export const AttendancePoliciesPage: React.FC = () => {
       setBeyondGracePenalty('HALF_DAY');
       setEarlyLeaveGrace(15);
       setEarlyLeavePenalty('HALF_DAY');
+      setMaxUnexcused(3);
       setStackDeductions(false);
       setIsActive(true);
     }
@@ -105,6 +127,8 @@ export const AttendancePoliciesPage: React.FC = () => {
       beyond_grace_penalty: beyondGracePenalty,
       early_leave_grace_minutes: Number(earlyLeaveGrace),
       early_leave_penalty: earlyLeavePenalty,
+      max_unexcused_absences: Number(maxUnexcused),
+      leave_type_quotas: leaveQuotas,
       stack_deductions: stackDeductions,
       is_active: isActive,
     };
@@ -189,6 +213,7 @@ export const AttendancePoliciesPage: React.FC = () => {
                   <th className="py-3 px-4">Grace Window</th>
                   <th className="py-3 px-4">Late Penalties</th>
                   <th className="py-3 px-4">Early Leave</th>
+                  <th className="py-3 px-4">Leave Quotas</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
@@ -210,6 +235,28 @@ export const AttendancePoliciesPage: React.FC = () => {
                     <td className="py-3.5 px-4 text-xs text-[#475569]">
                       <div>Grace: {p.early_leave_grace_minutes} mins</div>
                       <div>Penalty: <span className="font-medium text-[#0F172A]">{p.early_leave_penalty}</span></div>
+                    </td>
+                    <td className="py-3.5 px-4 text-xs text-[#475569]">
+                      <div className="flex flex-wrap gap-x-1.5 gap-y-1">
+                        {leaveTypes.length > 0 ? (
+                          leaveTypes.map((lt) => {
+                            const val = p.leave_type_quotas
+                              ? (p.leave_type_quotas[lt.leave_type_id] ?? p.leave_type_quotas[String(lt.leave_type_id)] ?? 0)
+                              : 0;
+                            return (
+                              <span key={lt.leave_type_id} className="inline-flex items-center gap-1 bg-[#F1F5F9] px-1.5 py-0.5 rounded text-[11px]">
+                                <span className="text-[#64748B]">{lt.name}:</span>
+                                <span className="font-semibold text-[#0F172A]">{val}d</span>
+                              </span>
+                            );
+                          })
+                        ) : (
+                          <div>
+                            PTO: <span className="font-semibold text-[#2563EB]">{p.paid_leave_days_count ?? 20}d</span> | Sick: <span className="font-semibold text-[#0F172A]">{p.sick_leave_days_count ?? 10}d</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-1 text-[#64748B]">Max Absences: <span className="font-semibold text-rose-600">{p.max_unexcused_absences ?? 3}d</span></div>
                     </td>
                     <td className="py-3.5 px-4">
                       <Badge variant={p.is_active ? 'success' : 'neutral'}>
@@ -253,7 +300,7 @@ export const AttendancePoliciesPage: React.FC = () => {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         title={selectedPolicy ? 'Edit Attendance Policy' : 'Create Attendance Policy'}
-        description="Configure grace period tolerances and penalty deductions."
+        description="Configure grace period tolerances, penalty deductions, and configurable annual leave quotas."
         maxWidth="lg"
         footer={
           <>
@@ -369,6 +416,43 @@ export const AttendancePoliciesPage: React.FC = () => {
                 <option value="HALF_DAY">HALF DAY</option>
                 <option value="FULL_DAY">FULL DAY</option>
               </select>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-[#E2E8F0]">
+            <h4 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider mb-2">
+              Policy Leave Quotas & Absence Entitlements
+            </h4>
+            <div className="grid grid-cols-2 gap-4">
+              {leaveTypes.map((lt) => (
+                <div key={lt.leave_type_id}>
+                  <label className="block text-xs font-semibold text-[#64748B] mb-1">
+                    {lt.name} Days (Year)
+                  </label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={leaveQuotas[lt.leave_type_id] ?? 0}
+                    onChange={(e) =>
+                      setLeaveQuotas((prev) => ({
+                        ...prev,
+                        [lt.leave_type_id]: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+              ))}
+              <div>
+                <label className="block text-xs font-semibold text-[#64748B] mb-1">
+                  Max Unexcused Absences / Month
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={maxUnexcused}
+                  onChange={(e) => setMaxUnexcused(Number(e.target.value))}
+                />
+              </div>
             </div>
           </div>
 

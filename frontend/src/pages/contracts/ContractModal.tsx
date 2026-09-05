@@ -75,7 +75,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
   useEffect(() => {
     if (contract) {
-      setEmployeeId(String(contract.employee_id));
+      setEmployeeId(contract.employee_id ? String(contract.employee_id) : '');
       setDepartmentId(contract.department_id ? String(contract.department_id) : '');
       setPositionId(contract.position_id ? String(contract.position_id) : '');
       setScheduleId(contract.schedule_id ? String(contract.schedule_id) : '');
@@ -104,10 +104,6 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     e.preventDefault();
     setError(null);
 
-    if (!employeeId) {
-      setError('Please select an employee');
-      return;
-    }
     if (!salaryStructureId) {
       setError('Please select a salary structure');
       return;
@@ -128,7 +124,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     setLoading(true);
     try {
       const payload: CreateContractPayload = {
-        employee_id: Number(employeeId),
+        employee_id: employeeId ? Number(employeeId) : null,
         department_id: departmentId ? Number(departmentId) : null,
         position_id: positionId ? Number(positionId) : null,
         schedule_id: scheduleId ? Number(scheduleId) : null,
@@ -187,16 +183,15 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         {/* Employee */}
         <div>
           <label className="block text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-1">
-            Employee *
+            Employee (Optional / Assign Later)
           </label>
           <select
-            disabled={isEditing || Boolean(defaultEmployeeId)}
+            disabled={Boolean(defaultEmployeeId)}
             value={employeeId}
             onChange={(e) => setEmployeeId(e.target.value)}
             className="w-full px-3 py-2 text-sm bg-white border border-[#E2E8F0] rounded-md text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#2563EB] disabled:bg-[#F1F5F9]"
-            required
           >
-            <option value="">Select Employee...</option>
+            <option value="">Unassigned / Select Employee Later...</option>
             {employees.map((emp) => (
               <option key={emp.employee_id} value={emp.employee_id}>
                 {emp.first_name} {emp.last_name} ({emp.employee_code})

@@ -21,7 +21,7 @@ export interface ContractAssignedEmployee {
 export interface Contract {
   contract_id: number;
   company_id: number;
-  employee_id: number;
+  employee_id?: number | null;
   employee_code?: string;
   employee_name?: string;
   employee_first_name?: string;
@@ -46,7 +46,7 @@ export interface Contract {
 }
 
 export interface CreateContractPayload {
-  employee_id: number;
+  employee_id?: number | null;
   department_id?: number | null;
   position_id?: number | null;
   schedule_id?: number | null;
