@@ -633,6 +633,23 @@ CREATE TABLE IF NOT EXISTS leave_requests (
   CONSTRAINT chk_leave_requests_date_window CHECK (end_date >= start_date)
 );
 
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'ex_leave_requests_no_overlap'
+  ) THEN
+    ALTER TABLE leave_requests
+      ADD CONSTRAINT ex_leave_requests_no_overlap
+      EXCLUDE USING gist (
+        employee_id WITH =,
+        daterange(start_date, end_date, '[]') WITH &&
+      )
+      WHERE (status IN ('PENDING', 'APPROVED'));
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS payruns (
   payrun_id SERIAL PRIMARY KEY,
   company_id INT NOT NULL,

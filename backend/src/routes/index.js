@@ -7,6 +7,7 @@ const contractRoutes = require("./contract.routes");
 const employeeResolverRoutes = require("./employee-resolver.routes");
 const attendancePolicyRoutes = require("./attendance-policy.routes");
 const attendanceRoutes = require("./attendance.routes");
+const leaveRoutes = require("./leave.routes");
 
 const router = express.Router();
 
@@ -18,6 +19,7 @@ router.use("/contracts", contractRoutes);
 router.use("/employees", employeeResolverRoutes);
 router.use("/attendance-policies", attendancePolicyRoutes);
 router.use("/attendance", attendanceRoutes);
+router.use("/", leaveRoutes);
 
 module.exports = router;
 
