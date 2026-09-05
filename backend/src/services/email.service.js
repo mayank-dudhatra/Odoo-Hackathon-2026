@@ -150,8 +150,28 @@ ${companyName || 'PeoplePay360'} Team`;
   return sendEmail({ to, subject, html, text });
 }
 
+async function sendLeaveNotificationEmail({ to, employeeName, leaveTypeName, startDate, endDate, daysRequested, status, reason, companyName }) {
+  if (!to) return false;
+  const subject = `PeoplePay360 - Leave Request ${status}: ${leaveTypeName}`;
+  const text = `Hello ${employeeName || 'Employee'},\n\nYour leave request for ${daysRequested} day(s) of ${leaveTypeName} (${startDate} to ${endDate}) has been updated to ${status}.\n${reason ? `Details/Reason: ${reason}\n` : ''}\nRegards,\n${companyName || 'PeoplePay360'} Team`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+      <h2 style="color: #2563eb;">Leave Request Update</h2>
+      <p>Hello <strong>${employeeName || 'Employee'}</strong>,</p>
+      <p>Your leave request for <strong>${daysRequested} day(s)</strong> of <strong>${leaveTypeName}</strong> (${startDate} to ${endDate}) status is now <strong style="color: ${status === 'APPROVED' ? '#16a34a' : status === 'REFUSED' ? '#dc2626' : '#2563eb'};">${status}</strong>.</p>
+      ${reason ? `<p style="background-color: #f8fafc; padding: 10px; border-radius: 4px;"><strong>Note:</strong> ${reason}</p>` : ''}
+      <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+      <p style="font-size: 12px; color: #94a3b8;">This is an automated notification from ${companyName || 'PeoplePay360'}.</p>
+    </div>
+  `;
+
+  return sendEmail({ to, subject, html, text });
+}
+
 module.exports = {
   sendEmail,
   sendPasswordResetEmail,
   sendUserInvitationEmail,
+  sendLeaveNotificationEmail,
 };

@@ -51,7 +51,14 @@ async function runLeaveConcurrencyIntegrationTests() {
   );
   const req2Id = req2Res.rows[0].leave_request_id;
 
-  const actor = { user_id: 1, company_id: companyId, role_name: "HR Manager" };
+  const userRes = await query(
+    `INSERT INTO users (company_id, username, email, role_id, status)
+     VALUES ($1, $2, $3, 2, 'ACTIVE') RETURNING user_id`,
+    [companyId, `user_${timeStr}`, `user_${timeStr}@test.com`]
+  );
+  const userId = userRes.rows[0].user_id;
+
+  const actor = { user_id: userId, company_id: companyId, role_name: "HR Manager" };
 
   // Trigger concurrent approval of both 2-day requests (Total requested = 4 days, Balance = 2 days)
   let successCount = 0;

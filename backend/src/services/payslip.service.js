@@ -154,6 +154,7 @@ async function generatePayrunPayslipsService({ companyId, payrunId, actorUserId 
 
       generatedPayslips.push(updated);
     } catch (err) {
+      console.error("[PayslipService] PDF Generation failed for payslip", rawP.payslip_id, ":", err);
       errors.push({
         payslip_id: rawP.payslip_id,
         employee_code: rawP.employee_code_snapshot,

@@ -597,6 +597,14 @@ async function createInvitationForUser({ actor, payload }) {
     ]
   );
 
+  const newUser = result.rows[0];
+
+  const companyResult = await query(
+    `SELECT name FROM companies WHERE company_id = $1 LIMIT 1`,
+    [actor.company_id]
+  );
+  const companyName = companyResult.rows[0]?.name || "PeoplePay360";
+
   let employeeName = null;
   let employeeCode = null;
   if (payload.employee_id) {

@@ -1,19 +1,33 @@
 const { query: defaultQuery } = require("../db");
 
-function getDb(executor) {
-  return (executor && executor.query) ? executor : defaultQuery;
+function parseArgs(first, second, ...rest) {
+  if (first && typeof first.query === "function") {
+    return { db: first, companyId: second, args: rest };
+  }
+  if (rest.length > 0) {
+    return { db: defaultQuery, companyId: second, args: rest };
+  }
+  return { db: defaultQuery, companyId: first, args: [second, ...rest] };
 }
 
-async function createPayrun(executor = defaultQuery, {
-  company_id,
-  name,
-  salary_structure_id,
-  period_start,
-  period_end,
-  status = "DRAFT",
-  created_by = null,
-}) {
-  const db = getDb(executor);
+async function createPayrun(executorOrData, dataIfExecutor) {
+  let db = defaultQuery;
+  let payload = executorOrData;
+  if (executorOrData && typeof executorOrData.query === "function") {
+    db = executorOrData;
+    payload = dataIfExecutor;
+  }
+
+  const {
+    company_id,
+    name,
+    salary_structure_id,
+    period_start,
+    period_end,
+    status = "DRAFT",
+    created_by = null,
+  } = payload;
+
   const result = await db.query(
     `
       INSERT INTO payruns (
@@ -41,8 +55,10 @@ async function createPayrun(executor = defaultQuery, {
   return result.rows[0];
 }
 
-async function findPayrunById(executor = defaultQuery, companyId, payrunId) {
-  const db = getDb(executor);
+async function findPayrunById(arg1, arg2, arg3) {
+  const { db, companyId, args } = parseArgs(arg1, arg2, arg3);
+  const payrunId = args[0];
+
   const result = await db.query(
     `
       SELECT
@@ -68,8 +84,10 @@ async function findPayrunById(executor = defaultQuery, companyId, payrunId) {
   return result.rows[0] || null;
 }
 
-async function findPayrunForUpdate(executor, companyId, payrunId) {
-  const db = getDb(executor);
+async function findPayrunForUpdate(arg1, arg2, arg3) {
+  const { db, companyId, args } = parseArgs(arg1, arg2, arg3);
+  const payrunId = args[0];
+
   const result = await db.query(
     `
       SELECT *
@@ -82,13 +100,15 @@ async function findPayrunForUpdate(executor, companyId, payrunId) {
   return result.rows[0] || null;
 }
 
-async function listPayruns(executor = defaultQuery, companyId, {
-  status = null,
-  salary_structure_id = null,
-  start_date = null,
-  end_date = null,
-} = {}) {
-  const db = getDb(executor);
+async function listPayruns(arg1, arg2, arg3) {
+  const { db, companyId, args } = parseArgs(arg1, arg2, arg3);
+  const {
+    status = null,
+    salary_structure_id = null,
+    start_date = null,
+    end_date = null,
+  } = args[0] || {};
+
   const params = [companyId];
   let sql = `
     SELECT
@@ -128,8 +148,12 @@ async function listPayruns(executor = defaultQuery, companyId, {
   return result.rows;
 }
 
-async function updatePayrunStatus(executor = defaultQuery, companyId, payrunId, status, actorUserId = null) {
-  const db = getDb(executor);
+async function updatePayrunStatus(arg1, arg2, arg3, arg4, arg5) {
+  const { db, companyId, args } = parseArgs(arg1, arg2, arg3, arg4, arg5);
+  const payrunId = args[0];
+  const status = args[1];
+  const actorUserId = args[2] || null;
+
   let extraUpdate = "";
   const params = [status, companyId, payrunId];
 
@@ -154,8 +178,11 @@ async function updatePayrunStatus(executor = defaultQuery, companyId, payrunId, 
   return result.rows[0] || null;
 }
 
-async function updatePayrunDetails(executor = defaultQuery, companyId, payrunId, fields) {
-  const db = getDb(executor);
+async function updatePayrunDetails(arg1, arg2, arg3, arg4) {
+  const { db, companyId, args } = parseArgs(arg1, arg2, arg3, arg4);
+  const payrunId = args[0];
+  const fields = args[1] || {};
+
   const allowed = ["name", "salary_structure_id", "period_start", "period_end"];
   const setClauses = [];
   const params = [companyId, payrunId];
@@ -168,7 +195,7 @@ async function updatePayrunDetails(executor = defaultQuery, companyId, payrunId,
   }
 
   if (setClauses.length === 0) {
-    return findPayrunById(executor, companyId, payrunId);
+    return findPayrunById(db, companyId, payrunId);
   }
 
   setClauses.push(`updated_at = NOW()`);
@@ -184,8 +211,13 @@ async function updatePayrunDetails(executor = defaultQuery, companyId, payrunId,
   return result.rows[0] || null;
 }
 
-async function findOverlappingPayruns(executor = defaultQuery, companyId, structureId, periodStart, periodEnd, excludePayrunId = null) {
-  const db = getDb(executor);
+async function findOverlappingPayruns(arg1, arg2, arg3, arg4, arg5, arg6) {
+  const { db, companyId, args } = parseArgs(arg1, arg2, arg3, arg4, arg5, arg6);
+  const structureId = args[0];
+  const periodStart = args[1];
+  const periodEnd = args[2];
+  const excludePayrunId = args[3] || null;
+
   const params = [companyId, structureId, periodStart, periodEnd];
   let sql = `
     SELECT payrun_id

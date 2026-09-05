@@ -56,6 +56,7 @@ async function findLeaveRequestById(executor = defaultQuery, companyId, requestI
         lt.is_paid,
         lt.payroll_integration,
         e.employee_code,
+        e.email AS employee_email,
         (e.first_name || ' ' || e.last_name) AS employee_name,
         (u.username) AS approved_by_username
       FROM leave_requests lr
@@ -80,9 +81,12 @@ async function findLeaveRequestForUpdate(executor, companyId, requestId) {
         lt.unit AS leave_type_unit,
         lt.requires_allocation,
         lt.is_paid,
-        lt.payroll_integration
+        lt.payroll_integration,
+        e.email AS employee_email,
+        (e.first_name || ' ' || e.last_name) AS employee_name
       FROM leave_requests lr
       JOIN leave_types lt ON lt.leave_type_id = lr.leave_type_id
+      JOIN employees e ON e.employee_id = lr.employee_id
       WHERE lr.company_id = $1 AND lr.leave_request_id = $2
       FOR UPDATE OF lr
     `,
@@ -151,9 +155,9 @@ async function updateLeaveRequestStatus(executor = defaultQuery, companyId, requ
   const result = await db.query(
     `
       UPDATE leave_requests
-      SET status = $1,
+      SET status = $1::varchar,
           approved_by = $2,
-          approved_at = CASE WHEN $1 IN ('APPROVED', 'REFUSED') THEN NOW() ELSE approved_at END,
+          approved_at = CASE WHEN $1::varchar IN ('APPROVED', 'REFUSED') THEN NOW() ELSE approved_at END,
           updated_at = NOW()
       WHERE company_id = $3 AND leave_request_id = $4
       RETURNING *

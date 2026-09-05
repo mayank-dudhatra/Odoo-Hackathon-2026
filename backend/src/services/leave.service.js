@@ -1,6 +1,7 @@
 const { withTransaction } = require("../db");
 const { AppError } = require("../utils/http");
 const { createAuditLog } = require("./audit.service");
+const { sendLeaveNotificationEmail } = require("./email.service");
 const {
   createLeaveType,
   findLeaveTypeById,
@@ -432,7 +433,21 @@ async function approveLeaveRequestService({ actor, requestId }) {
       },
     }, client);
 
-    return findLeaveRequestById(client, companyId, requestId);
+    const updated = await findLeaveRequestById(client, companyId, requestId);
+
+    if (updated && updated.employee_email) {
+      sendLeaveNotificationEmail({
+        to: updated.employee_email,
+        employeeName: updated.employee_name,
+        leaveTypeName: updated.leave_type_name,
+        startDate: updated.start_date,
+        endDate: updated.end_date,
+        daysRequested: updated.days_requested,
+        status: "APPROVED",
+      }).catch((err) => console.error("[LeaveService] Failed to send approval email:", err.message));
+    }
+
+    return updated;
   });
 }
 
@@ -459,7 +474,21 @@ async function refuseLeaveRequestService({ actor, requestId }) {
     details: { employee_id: request.employee_id },
   });
 
-  return findLeaveRequestById(null, companyId, requestId);
+  const updated = await findLeaveRequestById(null, companyId, requestId);
+
+  if (updated && updated.employee_email) {
+    sendLeaveNotificationEmail({
+      to: updated.employee_email,
+      employeeName: updated.employee_name,
+      leaveTypeName: updated.leave_type_name,
+      startDate: updated.start_date,
+      endDate: updated.end_date,
+      daysRequested: updated.days_requested,
+      status: "REFUSED",
+    }).catch((err) => console.error("[LeaveService] Failed to send refusal email:", err.message));
+  }
+
+  return updated;
 }
 
 async function cancelLeaveRequestService({ actor, requestId }) {
@@ -511,7 +540,21 @@ async function cancelLeaveRequestService({ actor, requestId }) {
       },
     }, client);
 
-    return findLeaveRequestById(client, companyId, requestId);
+    const updated = await findLeaveRequestById(client, companyId, requestId);
+
+    if (updated && updated.employee_email) {
+      sendLeaveNotificationEmail({
+        to: updated.employee_email,
+        employeeName: updated.employee_name,
+        leaveTypeName: updated.leave_type_name,
+        startDate: updated.start_date,
+        endDate: updated.end_date,
+        daysRequested: updated.days_requested,
+        status: "CANCELLED",
+      }).catch((err) => console.error("[LeaveService] Failed to send cancellation email:", err.message));
+    }
+
+    return updated;
   });
 }
 

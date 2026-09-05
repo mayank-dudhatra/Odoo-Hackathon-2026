@@ -174,9 +174,9 @@ async function updateAllocationStatus(executor = defaultQuery, companyId, alloca
   const result = await db.query(
     `
       UPDATE leave_allocations
-      SET status = $1,
+      SET status = $1::varchar,
           approved_by = $2,
-          approved_at = CASE WHEN $1 = 'APPROVED' THEN NOW() ELSE approved_at END,
+          approved_at = CASE WHEN $1::varchar = 'APPROVED' THEN NOW() ELSE approved_at END,
           updated_at = NOW()
       WHERE company_id = $3 AND allocation_id = $4
       RETURNING *

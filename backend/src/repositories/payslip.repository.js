@@ -8,6 +8,13 @@ function parseArgs(firstArg, secondArg, thirdArg) {
       targetId: thirdArg,
     };
   }
+  if (thirdArg !== undefined) {
+    return {
+      dbQuery: defaultQuery,
+      companyId: secondArg,
+      targetId: thirdArg,
+    };
+  }
   return {
     dbQuery: defaultQuery,
     companyId: firstArg,
