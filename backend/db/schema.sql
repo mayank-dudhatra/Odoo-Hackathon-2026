@@ -505,7 +505,7 @@ BEGIN
         employee_id WITH =,
         daterange(start_date, COALESCE(end_date, 'infinity'::date), '[]') WITH &&
       )
-      WHERE (status IN ('DRAFT', 'ACTIVE'));
+      WHERE (status = 'ACTIVE');
   END IF;
 END $$;
 

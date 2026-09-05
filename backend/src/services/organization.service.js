@@ -378,7 +378,6 @@ async function createEmployeeRecord(auth, payload) {
 
   if (payload.manager_id) {
     await ensureEmployeeBelongsToCompany(auth.company_id, payload.manager_id, "Employee manager");
-    await ensureNoCircularReporting(auth.company_id, -1, payload.manager_id);
   }
 
   const employeeId = await createEmployee(auth.company_id, {
