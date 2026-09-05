@@ -421,6 +421,31 @@ async function getEmployeeRecord(auth, employeeId) {
 }
 
 async function updateEmployeeRecord(auth, employeeId, payload) {
+  const isEmployeeRole = auth.role_name === "Employee" || auth.permission_scope === "OWN";
+  if (isEmployeeRole) {
+    if (!auth.employee_id || Number(employeeId) !== Number(auth.employee_id)) {
+      throw new AppError(403, "You can only update your own employee profile", "FORBIDDEN");
+    }
+
+    const protectedFields = [
+      "company_id",
+      "employee_code",
+      "hire_date",
+      "department_id",
+      "position_id",
+      "employee_type_id",
+      "schedule_id",
+      "manager_id",
+      "status",
+      "created_by",
+    ];
+
+    const attemptedProtected = protectedFields.filter((f) => payload[f] !== undefined && payload[f] !== null);
+    if (attemptedProtected.length > 0) {
+      throw new AppError(400, `Employees cannot modify administrative or employment fields: ${attemptedProtected.join(", ")}`, "PROTECTED_FIELDS_NOT_ALLOWED");
+    }
+  }
+
   const current = await getEmployeeById(auth.company_id, employeeId);
   if (!current) {
     throw new AppError(404, "Employee not found", "EMPLOYEE_NOT_FOUND");

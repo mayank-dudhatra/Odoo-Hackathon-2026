@@ -3,12 +3,14 @@ const { z } = require("zod");
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
 const checkInSchema = z.object({
+  employee_id: z.coerce.number().int().positive().optional(),
   work_date: z.string().regex(dateRegex).optional(),
   check_in: z.string().optional(),
   remarks: z.string().max(500).optional(),
 });
 
 const checkOutSchema = z.object({
+  employee_id: z.coerce.number().int().positive().optional(),
   work_date: z.string().regex(dateRegex).optional(),
   check_out: z.string().optional(),
   remarks: z.string().max(500).optional(),

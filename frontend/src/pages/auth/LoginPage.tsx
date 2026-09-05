@@ -40,6 +40,18 @@ function getSafeDestination(fromPath: string | undefined, roleName?: string | nu
   ) {
     return home;
   }
+  if (
+    roleName === 'HR Manager' &&
+    (fromPath.startsWith('/payroll') || fromPath.startsWith('/salary-structures') || fromPath.startsWith('/salary-rules'))
+  ) {
+    return home;
+  }
+  if (
+    (roleName === 'Payroll Manager' || roleName === 'Payroll User') &&
+    (fromPath.startsWith('/attendance-policies') || fromPath.startsWith('/users') || fromPath.startsWith('/roles') || fromPath.startsWith('/permissions'))
+  ) {
+    return home;
+  }
   return fromPath;
 }
 

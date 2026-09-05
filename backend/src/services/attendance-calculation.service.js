@@ -6,24 +6,41 @@ const penaltyWeights = {
 
 function parseTimeToMinutes(timeStr) {
   if (!timeStr) return 0;
-  const [h, m] = timeStr.split(":").map(Number);
+  const parts = String(timeStr).split(":");
+  const h = Number(parts[0]) || 0;
+  const m = Number(parts[1]) || 0;
   return h * 60 + m;
 }
 
-function parseTimestampToWorkDayMinutes(timestampStr, workDateStr) {
+function parseTimestampToWorkDayMinutes(timestampStr, timezone = "UTC") {
   if (!timestampStr) return null;
-  if (/^\d{2}:\d{2}(:\d{2})?$/.test(timestampStr)) {
-    return parseTimeToMinutes(timestampStr);
+  const strVal = String(timestampStr).trim();
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(strVal)) {
+    return parseTimeToMinutes(strVal);
   }
-  const dateObj = new Date(timestampStr);
+
+  const dateObj = new Date(strVal);
   if (Number.isNaN(dateObj.getTime())) return null;
 
-  if (typeof timestampStr === "string" && (timestampStr.endsWith("Z") || timestampStr.includes("+") || /T\d{2}:\d{2}:\d{2}/.test(timestampStr))) {
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone || "UTC",
+      hour: "numeric",
+      minute: "numeric",
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(dateObj);
+    let h = 0;
+    let m = 0;
+    for (const p of parts) {
+      if (p.type === "hour") h = parseInt(p.value, 10) % 24;
+      if (p.type === "minute") m = parseInt(p.value, 10);
+    }
+    return h * 60 + m;
+  } catch (err) {
     return dateObj.getUTCHours() * 60 + dateObj.getUTCMinutes();
   }
-  return dateObj.getHours() * 60 + dateObj.getMinutes();
 }
-
 
 function calculateAttendanceMetrics({
   checkIn,
@@ -31,6 +48,7 @@ function calculateAttendanceMetrics({
   workDate,
   scheduleDay,
   policy,
+  timezone = "UTC",
   currentMonthlyGraceCount = 0,
 }) {
   const isWorkingDay = Boolean(scheduleDay?.is_working_day);
@@ -38,19 +56,35 @@ function calculateAttendanceMetrics({
   const endTimeStr = scheduleDay?.end_time || null;
   const breakMinutes = Number(scheduleDay?.break_minutes || 0);
 
-  // 1. Non-working day calculation
-  if (!isWorkingDay) {
-    let hoursWorked = 0;
-    if (checkIn && checkOut) {
-      const inTime = new Date(checkIn).getTime();
-      const outTime = new Date(checkOut).getTime();
-      if (outTime > inTime) {
-        const totalMins = (outTime - inTime) / 60000;
-        const netMins = Math.max(0, totalMins - breakMinutes);
-        hoursWorked = Number((netMins / 60).toFixed(2));
+  // Calculate worked hours
+  let hoursWorked = 0;
+  if (checkIn && checkOut) {
+    const inTime = new Date(checkIn).getTime();
+    const outTime = new Date(checkOut).getTime();
+
+    let totalMins = 0;
+    if (!Number.isNaN(inTime) && !Number.isNaN(outTime) && outTime > inTime) {
+      totalMins = (outTime - inTime) / 60000;
+    } else {
+      const inMins = parseTimestampToWorkDayMinutes(checkIn, timezone);
+      const outMins = parseTimestampToWorkDayMinutes(checkOut, timezone);
+      if (inMins !== null && outMins !== null) {
+        if (outMins >= inMins) {
+          totalMins = outMins - inMins;
+        } else {
+          totalMins = (outMins + 1440) - inMins;
+        }
       }
     }
 
+    if (totalMins > 0) {
+      const netMins = Math.max(0, totalMins - breakMinutes);
+      hoursWorked = Number((netMins / 60).toFixed(2));
+    }
+  }
+
+  // 1. Non-working day calculation
+  if (!isWorkingDay) {
     return {
       scheduled_start_time: null,
       scheduled_end_time: null,
@@ -74,18 +108,6 @@ function calculateAttendanceMetrics({
   const startMins = parseTimeToMinutes(startTimeStr);
   const endMins = parseTimeToMinutes(endTimeStr);
 
-  // Worked hours calculation
-  let hoursWorked = 0;
-  if (checkIn && checkOut) {
-    const inTime = new Date(checkIn).getTime();
-    const outTime = new Date(checkOut).getTime();
-    if (outTime > inTime) {
-      const totalMins = (outTime - inTime) / 60000;
-      const netMins = Math.max(0, totalMins - breakMinutes);
-      hoursWorked = Number((netMins / 60).toFixed(2));
-    }
-  }
-
   // Late calculation
   let lateMinutes = 0;
   let lateStatus = "ON_TIME";
@@ -94,7 +116,7 @@ function calculateAttendanceMetrics({
   let incGraceLate = 0;
 
   if (checkIn) {
-    const checkInMins = parseTimestampToWorkDayMinutes(checkIn, workDate);
+    const checkInMins = parseTimestampToWorkDayMinutes(checkIn, timezone);
     if (checkInMins !== null && checkInMins > startMins) {
       lateMinutes = checkInMins - startMins;
 
@@ -102,18 +124,21 @@ function calculateAttendanceMetrics({
       const allowedOccurrences = Number(policy?.grace_occurrences_allowed || 0);
 
       if (lateMinutes <= graceMins) {
-        lateStatus = "WITHIN_GRACE";
         if (currentMonthlyGraceCount < allowedOccurrences) {
+          lateStatus = "WITHIN_GRACE";
           graceOccurrenceNo = currentMonthlyGraceCount + 1;
           latePenalty = policy?.grace_period_penalty || "NONE";
           incGraceLate = 1;
         } else {
+          lateStatus = "BEYOND_GRACE";
           graceOccurrenceNo = null;
           latePenalty = policy?.beyond_grace_penalty || "NONE";
+          incGraceLate = 0;
         }
       } else {
         lateStatus = "BEYOND_GRACE";
         latePenalty = policy?.beyond_grace_penalty || "NONE";
+        incGraceLate = 0;
       }
     }
   } else {
@@ -126,14 +151,17 @@ function calculateAttendanceMetrics({
   let incEarlyLeave = 0;
 
   if (checkOut) {
-    const checkOutMins = parseTimestampToWorkDayMinutes(checkOut, workDate);
+    const checkOutMins = parseTimestampToWorkDayMinutes(checkOut, timezone);
     if (checkOutMins !== null && checkOutMins < endMins) {
-      earlyLeaveMinutes = endMins - checkOutMins;
-
+      const minsBefore = endMins - checkOutMins;
       const earlyGraceMins = Number(policy?.early_leave_grace_minutes || 0);
-      if (earlyLeaveMinutes <= earlyGraceMins) {
+
+      if (minsBefore <= earlyGraceMins) {
+        earlyLeaveMinutes = minsBefore;
         earlyPenalty = "NONE";
+        incEarlyLeave = 0;
       } else {
+        earlyLeaveMinutes = minsBefore;
         earlyPenalty = policy?.early_leave_penalty || "NONE";
         incEarlyLeave = 1;
       }
@@ -199,4 +227,5 @@ function calculateAttendanceMetrics({
 module.exports = {
   calculateAttendanceMetrics,
   parseTimeToMinutes,
+  parseTimestampToWorkDayMinutes,
 };

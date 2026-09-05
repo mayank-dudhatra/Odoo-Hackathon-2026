@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Menu, LogOut, ChevronDown, UserCheck } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { Badge } from '../common/Badge';
@@ -10,6 +11,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onMenuToggle, pageTitle = 'PeoplePay360' }) => {
   const { user, role, logout } = useAuth();
+  const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -29,6 +31,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, pageTitle = 'Peopl
   const handleLogout = async () => {
     setDropdownOpen(false);
     await logout();
+    navigate('/login', { replace: true });
   };
 
   const getInitials = (name?: string, email?: string) => {

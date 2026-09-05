@@ -79,7 +79,7 @@ router.get(
 router.get("/employees/me", requirePermission("EMPLOYEES", "READ", { ownResolver: () => true }), myEmployee);
 router.get("/employees/:id", requirePermission("EMPLOYEES", "READ", { ownResolver: (req) => Number(req.params.id) === Number(req.auth.employee_id) }), validateRequest({ params: idParam }), getEmployee);
 router.post("/employees", requirePermission("EMPLOYEES", "CREATE"), validateRequest({ body: employeeSchema }), createEmployee);
-router.patch("/employees/:id", requirePermission("EMPLOYEES", "UPDATE"), validateRequest({ params: idParam, body: employeeSchema.partial() }), updateEmployee);
+router.patch("/employees/:id", requirePermission("EMPLOYEES", "UPDATE", { ownResolver: (req) => Number(req.params.id) === Number(req.auth.employee_id) }), validateRequest({ params: idParam, body: employeeSchema.partial() }), updateEmployee);
 router.patch("/employees/:id/status", requirePermission("EMPLOYEES", "UPDATE_STATUS"), validateRequest({ params: idParam, body: employeeStatusSchema }), changeEmployeeStatus);
 
 module.exports = router;

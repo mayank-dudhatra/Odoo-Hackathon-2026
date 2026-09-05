@@ -49,7 +49,8 @@ async function resolvePolicyForSchedule(companyId, effectiveSchedule, client = n
 }
 
 async function processCheckIn(auth, payload) {
-  const employeeId = auth.employee_id || payload.employee_id;
+  const isEmployeeRole = auth.role_name === "Employee";
+  const employeeId = isEmployeeRole ? auth.employee_id : (payload.employee_id || auth.employee_id);
   if (!employeeId) {
     throw new AppError(400, "Employee ID is required for check-in", "MISSING_EMPLOYEE_ID");
   }
@@ -58,9 +59,20 @@ async function processCheckIn(auth, payload) {
   const checkInTimestamp = payload.check_in || new Date().toISOString();
 
   return withTransaction(async (client) => {
+    const empCheck = await client.query(
+      `SELECT employee_id, status FROM employees WHERE company_id = $1 AND employee_id = $2 LIMIT 1`,
+      [auth.company_id, employeeId]
+    );
+    if (!empCheck.rows[0] || empCheck.rows[0].status !== "ACTIVE") {
+      throw new AppError(400, "Employee not found or inactive", "INVALID_EMPLOYEE");
+    }
+
     const existing = await getAttendanceByEmployeeAndDate(auth.company_id, employeeId, workDate, client);
     if (existing && existing.check_in) {
-      throw new AppError(400, "Check-in record already exists for this working date", "DUPLICATE_CHECK_IN");
+      if (existing.check_out) {
+        throw new AppError(400, "Attendance has already been completed for today", "ATTENDANCE_COMPLETED");
+      }
+      throw new AppError(400, "Employee already has an active attendance session", "DUPLICATE_CHECK_IN");
     }
 
     const effectiveSchedule = await resolveEffectiveSchedule(auth.company_id, employeeId, workDate);
@@ -78,6 +90,7 @@ async function processCheckIn(auth, payload) {
       workDate,
       scheduleDay,
       policy,
+      timezone: effectiveSchedule?.timezone || "UTC",
       currentMonthlyGraceCount: counter.grace_late_count || 0,
     });
 
@@ -157,7 +170,8 @@ async function processCheckIn(auth, payload) {
 }
 
 async function processCheckOut(auth, payload) {
-  const employeeId = auth.employee_id || payload.employee_id;
+  const isEmployeeRole = auth.role_name === "Employee";
+  const employeeId = isEmployeeRole ? auth.employee_id : (payload.employee_id || auth.employee_id);
   if (!employeeId) {
     throw new AppError(400, "Employee ID is required for check-out", "MISSING_EMPLOYEE_ID");
   }
@@ -166,9 +180,21 @@ async function processCheckOut(auth, payload) {
   const checkOutTimestamp = payload.check_out || new Date().toISOString();
 
   return withTransaction(async (client) => {
+    const empCheck = await client.query(
+      `SELECT employee_id, status FROM employees WHERE company_id = $1 AND employee_id = $2 LIMIT 1`,
+      [auth.company_id, employeeId]
+    );
+    if (!empCheck.rows[0] || empCheck.rows[0].status !== "ACTIVE") {
+      throw new AppError(400, "Employee not found or inactive", "INVALID_EMPLOYEE");
+    }
+
     const existing = await getAttendanceByEmployeeAndDate(auth.company_id, employeeId, workDate, client);
     if (!existing || !existing.check_in) {
-      throw new AppError(400, "Check-in record required before check-out", "CHECK_IN_REQUIRED");
+      throw new AppError(400, "Cannot check out because no active check-in exists", "CHECK_IN_REQUIRED");
+    }
+
+    if (existing.check_out) {
+      throw new AppError(400, "Check-out has already been recorded for this attendance session", "DUPLICATE_CHECK_OUT");
     }
 
     if (new Date(checkOutTimestamp) <= new Date(existing.check_in)) {
@@ -197,6 +223,7 @@ async function processCheckOut(auth, payload) {
       workDate,
       scheduleDay,
       policy,
+      timezone: effectiveSchedule?.timezone || "UTC",
       currentMonthlyGraceCount: Math.max(0, (counter.grace_late_count || 0) - oldGraceLate),
     });
 
@@ -286,6 +313,7 @@ async function correctAttendanceRecord(auth, attendanceId, payload) {
       workDate,
       scheduleDay,
       policy,
+      timezone: effectiveSchedule?.timezone || "UTC",
       currentMonthlyGraceCount: Math.max(0, (counter.grace_late_count || 0) - oldGraceLate),
     });
 

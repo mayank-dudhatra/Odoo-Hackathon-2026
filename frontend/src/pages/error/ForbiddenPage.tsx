@@ -27,7 +27,7 @@ export const ForbiddenPage: React.FC = () => {
         </Button>
         <Button
           variant="primary"
-          onClick={() => navigate('/users')}
+          onClick={() => navigate('/')}
         >
           Return to Allowed Section
         </Button>

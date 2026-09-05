@@ -117,6 +117,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [refreshUser]);
 
   const login = async (credentials: LoginCredentials): Promise<User> => {
+    // Clear any previous session state before storing new user session
+    clearStoredTokens();
+    localStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem(PERMISSIONS_STORAGE_KEY);
+    setUser(null);
+    setPermissions([]);
+
     setIsLoading(true);
     try {
       const response = await authApi.login(credentials);

@@ -5,6 +5,7 @@ const authLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
   message: {
     success: false,
     error: {
@@ -19,6 +20,7 @@ const loginLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
   message: {
     success: false,
     error: {
@@ -33,6 +35,7 @@ const passwordResetLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: false,
   message: {
     success: false,
     error: {
@@ -43,4 +46,3 @@ const passwordResetLimiter = rateLimit({
 });
 
 module.exports = { authLimiter, loginLimiter, passwordResetLimiter };
-
