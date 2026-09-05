@@ -65,10 +65,12 @@ export interface EffectiveContract {
   wage: number;
   wage_type: WageType;
   start_date: string;
-  end_date: string | null;
+  end_date?: string | null;
   status: ContractStatus;
-  is_effective: boolean;
-  department_name?: string;
-  position_name?: string;
-  salary_structure_name?: string;
+  is_effective?: boolean;
+  department_name?: string | null;
+  position_name?: string | null;
+  schedule_id?: number | null;
+  schedule_name?: string | null;
+  salary_structure_name?: string | null;
 }

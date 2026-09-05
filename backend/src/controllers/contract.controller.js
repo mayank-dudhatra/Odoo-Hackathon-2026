@@ -10,7 +10,11 @@ const {
 const { success } = require("../utils/response");
 
 async function listContracts(req, res) {
-  return success(res, await listCompanyContracts(req.auth, req.query), "Contracts fetched");
+  const filters = { ...req.query };
+  if (req.auth?.role_name === "Employee" || (req.permission && req.permission.scope === "OWN")) {
+    filters.employee_id = req.auth.employee_id || -1;
+  }
+  return success(res, await listCompanyContracts(req.auth, filters), "Contracts fetched");
 }
 
 async function getContract(req, res) {

@@ -54,10 +54,13 @@ export const EmployeeFormPage: React.FC = () => {
   const navigate = useNavigate();
   const { role, user } = useAuth();
   const isEditing = Boolean(id);
-  const isSelfEdit =
-    isEditing &&
-    (role === 'Employee' ||
-      (role !== 'Admin' && role !== 'HR Manager' && String(user?.employee_id) === String(id)));
+  const isSelfEdit = false;
+
+  useEffect(() => {
+    if (role === 'Employee') {
+      navigate(user?.employee_id ? `/employees/${user.employee_id}` : '/dashboard', { replace: true });
+    }
+  }, [role, user, navigate]);
 
   // Onboarding step (for new employee creation)
   const [currentStep, setCurrentStep] = useState(1);

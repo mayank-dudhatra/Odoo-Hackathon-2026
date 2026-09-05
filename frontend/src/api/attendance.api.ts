@@ -119,6 +119,12 @@ export const attendanceApi = {
     return [];
   },
 
+  async getPolicy(id: number | string): Promise<AttendancePolicy> {
+    const res = await apiClient<{ data: AttendancePolicy } | AttendancePolicy>(`/attendance-policies/${id}`);
+    if (res && 'data' in res && res.data) return res.data;
+    return res as AttendancePolicy;
+  },
+
   async createPolicy(payload: Partial<AttendancePolicy>): Promise<AttendancePolicy> {
     const res = await apiClient<{ data: AttendancePolicy } | AttendancePolicy>('/attendance-policies', {
       method: 'POST',

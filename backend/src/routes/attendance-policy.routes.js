@@ -17,8 +17,8 @@ const router = express.Router();
 
 router.use(authenticate, loadCompanyContext);
 
-router.get("/", requirePermission("ATTENDANCE_POLICIES", "READ"), listAttendancePoliciesHandler);
-router.get("/:id", requirePermission("ATTENDANCE_POLICIES", "READ"), validateRequest({ params: idParam }), getAttendancePolicyHandler);
+router.get("/", listAttendancePoliciesHandler);
+router.get("/:id", validateRequest({ params: idParam }), getAttendancePolicyHandler);
 router.post("/", requirePermission("ATTENDANCE_POLICIES", "CREATE"), validateRequest({ body: attendancePolicySchema }), createAttendancePolicyHandler);
 router.patch("/:id", requirePermission("ATTENDANCE_POLICIES", "UPDATE"), validateRequest({ params: idParam, body: attendancePolicyUpdateSchema }), updateAttendancePolicyHandler);
 router.delete("/:id", requirePermission("ATTENDANCE_POLICIES", "DELETE"), validateRequest({ params: idParam }), deactivateAttendancePolicyHandler);

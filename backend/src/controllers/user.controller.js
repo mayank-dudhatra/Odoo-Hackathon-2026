@@ -1,5 +1,6 @@
 const {
   listCompanyUsers,
+  getCompanyUsersSummary,
   getCompanyUserById,
   setUserStatus,
   changeUserRole,
@@ -8,8 +9,13 @@ const {
 const { success } = require("../utils/response");
 
 async function listUsers(req, res) {
-  const users = await listCompanyUsers(req.auth.company_id);
+  const users = await listCompanyUsers(req.auth.company_id, req.query);
   return success(res, users, "Users fetched");
+}
+
+async function getUsersSummary(req, res) {
+  const summary = await getCompanyUsersSummary(req.auth.company_id);
+  return success(res, summary, "Users summary fetched");
 }
 
 async function getUser(req, res) {
@@ -55,6 +61,7 @@ async function linkEmployee(req, res) {
 
 module.exports = {
   listUsers,
+  getUsersSummary,
   getUser,
   disableUser,
   enableUser,

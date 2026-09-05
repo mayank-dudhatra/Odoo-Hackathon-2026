@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
+  LayoutDashboard,
   Users,
   Building2,
   Briefcase,
@@ -30,7 +31,20 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { checkPermission, role, user } = useAuth();
   const isAdmin = role === 'Admin';
+  const isEmployee = role === 'Employee';
+  const isHR = role === 'HR Manager';
+  const isPayroll = role === 'Payroll Manager' || role === 'Payroll User';
   const hasEmployeeProfile = Boolean(user?.employee_id);
+
+  // 0. Dashboard
+  const dashboardNavItems = [
+    {
+      name: isEmployee ? 'My Dashboard' : 'Dashboard',
+      path: '/dashboard',
+      icon: <LayoutDashboard className="w-[18px] h-[18px]" />,
+      visible: true,
+    },
+  ];
 
   // 1. Organization & HR
   const employeeNavItems = [
@@ -38,73 +52,73 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       name: 'All Employees',
       path: '/employees',
       icon: <UserCheck className="w-[18px] h-[18px]" />,
-      visible: isAdmin || (role !== 'Employee' && checkPermission('EMPLOYEES', 'READ')),
+      visible: isAdmin || (!isEmployee && checkPermission('EMPLOYEES', 'READ')),
     },
     {
       name: 'My Profile',
       path: user?.employee_id ? `/employees/${user.employee_id}` : '/employees',
       icon: <UserCheck className="w-[18px] h-[18px]" />,
-      visible: role === 'Employee' || (hasEmployeeProfile && !isAdmin && role !== 'HR Manager'),
+      visible: isEmployee || (hasEmployeeProfile && !isAdmin && !isHR),
     },
     {
       name: 'Departments',
       path: '/departments',
       icon: <Building2 className="w-[18px] h-[18px]" />,
-      visible: isAdmin || checkPermission('DEPARTMENTS', 'READ'),
+      visible: isAdmin || (!isEmployee && checkPermission('DEPARTMENTS', 'READ')),
     },
     {
       name: 'Positions',
       path: '/positions',
       icon: <Briefcase className="w-[18px] h-[18px]" />,
-      visible: isAdmin || checkPermission('POSITIONS', 'READ'),
+      visible: isAdmin || (!isEmployee && checkPermission('POSITIONS', 'READ')),
     },
     {
       name: 'Employee Types',
       path: '/employee-types',
       icon: <Layers className="w-[18px] h-[18px]" />,
-      visible: isAdmin || checkPermission('EMPLOYEE_TYPES', 'READ'),
+      visible: isAdmin || (!isEmployee && checkPermission('EMPLOYEE_TYPES', 'READ')),
     },
   ];
 
-  // 2. Contracts & Schedules (Phase 3)
+  // 2. Contracts & Schedules
   const contractNavItems = [
     {
       name: 'Contracts',
       path: '/contracts',
       icon: <FileText className="w-[18px] h-[18px]" />,
-      visible: isAdmin || checkPermission('CONTRACTS', 'READ'),
+      visible: (isAdmin || !isEmployee) && checkPermission('CONTRACTS', 'READ'),
     },
     {
       name: 'Working Schedules',
       path: '/working-schedules',
       icon: <Clock className="w-[18px] h-[18px]" />,
-      visible: isAdmin || checkPermission('WORKING_SCHEDULES', 'READ'),
+      visible: (isAdmin || !isEmployee) && checkPermission('WORKING_SCHEDULES', 'READ'),
     },
   ];
 
-  // 3. Attendance (Phase 4)
+  // 3. Attendance
   const attendanceNavItems = [
     {
       name: 'Attendance',
       path: '/attendance',
       icon: <CalendarCheck className="w-[18px] h-[18px]" />,
-      visible: isAdmin || (role !== 'Employee' && checkPermission('ATTENDANCE', 'READ')),
+      visible: isAdmin || (!isEmployee && checkPermission('ATTENDANCE', 'READ')),
     },
     {
       name: 'My Attendance',
       path: '/my-attendance',
       icon: <Clock className="w-[18px] h-[18px]" />,
-      visible: hasEmployeeProfile || role === 'Employee',
+      visible: hasEmployeeProfile || isEmployee,
     },
     {
       name: 'Attendance Policies',
       path: '/attendance-policies',
       icon: <ShieldCheck className="w-[18px] h-[18px]" />,
-      visible: isAdmin || checkPermission('ATTENDANCE_POLICIES', 'READ'),
+      visible: (isAdmin || !isEmployee) && checkPermission('ATTENDANCE_POLICIES', 'READ'),
     },
   ];
 
-  // 4. Time Off (Phase 5)
+  // 4. Time Off
   const timeOffNavItems = [
     {
       name: 'Time Off & Leaves',
@@ -114,45 +128,45 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     },
   ];
 
-  // 5. Salary Configuration (Phase 6)
+  // 5. Salary Configuration
   const salaryNavItems = [
     {
       name: 'Salary Structures',
       path: '/salary-structures',
       icon: <Sliders className="w-[18px] h-[18px]" />,
-      visible: isAdmin || checkPermission('SALARY_STRUCTURES', 'READ'),
+      visible: (isAdmin || isPayroll) && checkPermission('SALARY_STRUCTURES', 'READ'),
     },
     {
       name: 'Salary Rules',
       path: '/salary-rules',
       icon: <Calculator className="w-[18px] h-[18px]" />,
-      visible: isAdmin || checkPermission('SALARY_RULES', 'READ'),
+      visible: (isAdmin || isPayroll) && checkPermission('SALARY_RULES', 'READ'),
     },
   ];
 
-  // 6. Payroll & Payslips (Phases 7 & 8)
+  // 6. Payroll & Payslips
   const payrollNavItems = [
     {
       name: 'Payroll Runs',
       path: '/payroll/payruns',
       icon: <DollarSign className="w-[18px] h-[18px]" />,
-      visible: isAdmin || checkPermission('PAYRUNS', 'READ'),
+      visible: (isAdmin || isPayroll) && checkPermission('PAYRUNS', 'READ'),
     },
     {
       name: 'Payroll History',
       path: '/payroll/history',
       icon: <History className="w-[18px] h-[18px]" />,
-      visible: isAdmin || checkPermission('PAYRUNS', 'READ'),
+      visible: (isAdmin || isPayroll) && checkPermission('PAYRUNS', 'READ'),
     },
     {
-      name: 'Payslips',
+      name: isEmployee ? 'My Payslips' : 'Payslips',
       path: '/payslips',
       icon: <Receipt className="w-[18px] h-[18px]" />,
       visible: isAdmin || checkPermission('PAYSLIPS', 'READ') || hasEmployeeProfile,
     },
   ];
 
-  // 7. Administration (Phase 1)
+  // 7. Administration
   const adminNavItems = [
     {
       name: 'Users',
@@ -175,6 +189,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   ];
 
   const sections = [
+    { title: 'Overview', items: dashboardNavItems.filter((i) => i.visible) },
     { title: 'Organization & HR', items: employeeNavItems.filter((i) => i.visible) },
     { title: 'Contracts & Shift Schedules', items: contractNavItems.filter((i) => i.visible) },
     { title: 'Attendance', items: attendanceNavItems.filter((i) => i.visible) },

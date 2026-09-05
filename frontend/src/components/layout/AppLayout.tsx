@@ -2,8 +2,11 @@ import React, { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { useAuth } from '../../hooks/useAuth';
+import { ChangePasswordModal } from '../auth/ChangePasswordModal';
 
 export const AppLayout: React.FC = () => {
+  const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 
@@ -13,6 +16,8 @@ export const AppLayout: React.FC = () => {
     if (path.startsWith('/permissions')) return 'System Permissions';
     return 'PeoplePay360';
   };
+
+  const isPasswordChangeRequired = Boolean(user?.must_change_password);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex text-[#0F172A]">
@@ -27,7 +32,16 @@ export const AppLayout: React.FC = () => {
         />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-          <Outlet />
+          {isPasswordChangeRequired ? (
+            <div className="py-12 flex flex-col items-center justify-center">
+              <ChangePasswordModal
+                isOpen={true}
+                isForced={true}
+              />
+            </div>
+          ) : (
+            <Outlet />
+          )}
         </main>
       </div>
     </div>

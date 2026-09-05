@@ -86,8 +86,30 @@ router.get(
 router.get("/employees/me", requirePermission("EMPLOYEES", "READ", { ownResolver: () => true }), myEmployee);
 router.get("/employees/:id", requirePermission("EMPLOYEES", "READ", { ownResolver: (req) => Number(req.params.id) === Number(req.auth.employee_id) }), validateRequest({ params: idParam }), getEmployee);
 router.post("/employees", requirePermission("EMPLOYEES", "CREATE"), validateRequest({ body: employeeSchema }), createEmployee);
-router.patch("/employees/:id", requirePermission("EMPLOYEES", "UPDATE", { ownResolver: (req) => Number(req.params.id) === Number(req.auth.employee_id) }), validateRequest({ params: idParam, body: employeeSchema.partial() }), updateEmployee);
-router.patch("/employees/:id/status", requirePermission("EMPLOYEES", "UPDATE_STATUS"), validateRequest({ params: idParam, body: employeeStatusSchema }), changeEmployeeStatus);
-router.delete("/employees/:id", requirePermission("EMPLOYEES", "DELETE"), validateRequest({ params: idParam }), deleteEmployee);
+router.patch(
+  "/employees/:id",
+  requirePermission("EMPLOYEES", "UPDATE"),
+  (req, res, next) => {
+    if (req.auth?.role_name === "Employee") {
+      throw new AppError(403, "Employees are not allowed to update employee details", "FORBIDDEN");
+    }
+    next();
+  },
+  validateRequest({ params: idParam, body: employeeSchema.partial() }),
+  updateEmployee
+);
+router.patch(
+  "/employees/:id/status",
+  requirePermission("EMPLOYEES", "UPDATE_STATUS"),
+  (req, res, next) => {
+    if (req.auth?.role_name === "Employee") {
+      throw new AppError(403, "Employees are not allowed to change employment status", "FORBIDDEN");
+    }
+    next();
+  },
+  validateRequest({ params: idParam, body: employeeStatusSchema }),
+  changeEmployeeStatus
+);
+router.delete("/employees/:id", requirePermission("EMPLOYEES", "DELETE"), deleteEmployee);
 
 module.exports = router;

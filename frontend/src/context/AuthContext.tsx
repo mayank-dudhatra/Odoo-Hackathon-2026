@@ -110,9 +110,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setPermissions([]);
     };
 
+    const handleMustChangePassword = () => {
+      setUser((prev) => {
+        if (!prev) return null;
+        const updated = { ...prev, must_change_password: true };
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updated));
+        return updated;
+      });
+    };
+
     window.addEventListener('pp360:unauthorized', handleUnauthorized);
+    window.addEventListener('pp360:must-change-password', handleMustChangePassword);
     return () => {
       window.removeEventListener('pp360:unauthorized', handleUnauthorized);
+      window.removeEventListener('pp360:must-change-password', handleMustChangePassword);
     };
   }, [refreshUser]);
 
@@ -160,6 +171,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const changePassword = async (data: {
+    current_password: string;
+    new_password: string;
+    confirm_password?: string;
+  }): Promise<void> => {
+    setIsLoading(true);
+    try {
+      const response = await authApi.changePassword(data);
+      if (response?.access_token) {
+        setStoredTokens(response.access_token);
+      }
+
+      setUser((prev) => {
+        const updated = response?.user
+          ? { ...response.user, must_change_password: false }
+          : prev
+          ? { ...prev, must_change_password: false }
+          : null;
+        if (updated) {
+          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updated));
+        }
+        return updated;
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const checkPermission = (module: string, action: string): boolean => {
     if (user?.role_name === 'Admin') {
       return true;
@@ -184,6 +223,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         refreshUser,
         checkPermission,
+        changePassword,
       }}
     >
       {children}

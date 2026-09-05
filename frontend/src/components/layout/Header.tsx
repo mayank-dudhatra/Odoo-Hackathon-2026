@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, LogOut, ChevronDown, UserCheck } from 'lucide-react';
+import { Menu, LogOut, ChevronDown, UserCheck, KeyRound, LayoutDashboard, User } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { Badge } from '../common/Badge';
+import { ChangePasswordModal } from '../auth/ChangePasswordModal';
 
 interface HeaderProps {
   onMenuToggle: () => void;
@@ -13,6 +14,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, pageTitle = 'Peopl
   const { user, role, logout } = useAuth();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -117,6 +119,39 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, pageTitle = 'Peopl
                   <UserCheck className="w-3.5 h-3.5 text-[#16A34A]" />
                   <span>Status: <strong className="text-[#0F172A]">{user?.status || 'Active'}</strong></span>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    navigate('/dashboard');
+                  }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-[#0F172A] hover:bg-[#F1F5F9] flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <LayoutDashboard className="w-4 h-4 text-[#64748B]" />
+                  <span>My Dashboard</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    navigate('/profile');
+                  }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-[#0F172A] hover:bg-[#F1F5F9] flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <User className="w-4 h-4 text-[#64748B]" />
+                  <span>My Profile</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    setChangePasswordOpen(true);
+                  }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-[#0F172A] hover:bg-[#F1F5F9] flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <KeyRound className="w-4 h-4 text-[#64748B]" />
+                  <span>Change Password</span>
+                </button>
               </div>
 
               <div className="border-t border-[#E2E8F0] pt-1">
@@ -133,6 +168,13 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, pageTitle = 'Peopl
           )}
         </div>
       </div>
+
+      {/* Voluntary Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={changePasswordOpen}
+        onClose={() => setChangePasswordOpen(false)}
+        isForced={false}
+      />
     </header>
   );
 };

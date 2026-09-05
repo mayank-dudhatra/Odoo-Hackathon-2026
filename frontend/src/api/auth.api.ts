@@ -40,4 +40,26 @@ export const authApi = {
       // Best-effort logout on backend
     }
   },
+
+  async changePassword(payload: {
+    current_password: string;
+    new_password: string;
+    confirm_password?: string;
+  }): Promise<{
+    password_changed: boolean;
+    must_change_password: boolean;
+    access_token?: string;
+    user?: import('../types/auth').User;
+    message?: string;
+  }> {
+    const response = await apiClient<any>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    if (response && typeof response === 'object' && 'data' in response && response.data) {
+      return response.data;
+    }
+    return response;
+  },
 };

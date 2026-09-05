@@ -11,6 +11,11 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   checkPermission: (module: string, action: string) => boolean;
+  changePassword: (data: {
+    current_password: string;
+    new_password: string;
+    confirm_password?: string;
+  }) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);

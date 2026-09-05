@@ -64,13 +64,14 @@ async function activate(req, res) {
 }
 
 async function changeOwnPassword(req, res) {
-  await changePassword({
+  const result = await changePassword({
     userId: req.auth.user_id,
     companyId: req.auth.company_id,
     currentPassword: req.body.current_password,
     newPassword: req.body.new_password,
+    currentSessionId: req.auth.session_id,
   });
-  return success(res, { password_changed: true }, "Password changed");
+  return success(res, result, "Password changed successfully");
 }
 
 async function me(req, res) {

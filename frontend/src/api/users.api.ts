@@ -1,13 +1,25 @@
 import { apiClient } from './client';
-import type { User, UserFilters, CreateUserPayload, UpdateUserPayload, UserStatus } from '../types/users';
+import type { User, UserFilters, UserSummary, CreateUserPayload, UpdateUserPayload, UserStatus } from '../types/users';
 
 export const usersApi = {
+  async getUsersSummary(): Promise<UserSummary> {
+    const res = await apiClient<{ data: UserSummary } | UserSummary>('/users/summary', {
+      method: 'GET',
+    });
+    if (res && 'data' in res && res.data) {
+      return res.data;
+    }
+    return (res as UserSummary) || { total_users: 0, active_users: 0, invited_users: 0, disabled_users: 0 };
+  },
+
   async listUsers(filters?: UserFilters): Promise<User[]> {
     const params = new URLSearchParams();
     if (filters?.search) params.append('search', filters.search);
     if (filters?.role_id) params.append('role_id', String(filters.role_id));
     if (filters?.employee_id) params.append('employee_id', String(filters.employee_id));
     if (filters?.status && filters.status !== 'ALL') params.append('status', filters.status);
+    if (filters?.is_verified !== undefined && filters.is_verified !== '') params.append('is_verified', String(filters.is_verified));
+    if (filters?.is_linked !== undefined && filters.is_linked !== '') params.append('is_linked', String(filters.is_linked));
     if (filters?.is_active !== undefined) params.append('is_active', String(filters.is_active));
     if (filters?.page) params.append('page', String(filters.page));
     if (filters?.limit) params.append('limit', String(filters.limit));

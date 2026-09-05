@@ -36,7 +36,7 @@ import { useAuth } from '../../hooks/useAuth';
 export const EmployeeDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { checkPermission, role, user } = useAuth();
+  const { checkPermission, role } = useAuth();
   const isAdmin = role === 'Admin';
 
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -48,6 +48,7 @@ export const EmployeeDetailPage: React.FC = () => {
 
   // Modal view states
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
 
   // Status Change State
@@ -59,10 +60,10 @@ export const EmployeeDetailPage: React.FC = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const isOwnProfile = Boolean(user?.employee_id && String(user.employee_id) === String(id));
-  const canUpdate = isAdmin || checkPermission('EMPLOYEES', 'UPDATE') || isOwnProfile;
-  const canChangeStatus = isAdmin || checkPermission('EMPLOYEES', 'UPDATE_STATUS') || checkPermission('EMPLOYEES', 'UPDATE');
-  const canDelete = isAdmin || checkPermission('EMPLOYEES', 'DELETE');
+  const isEmployeeUser = role === 'Employee';
+  const canUpdate = !isEmployeeUser && (isAdmin || checkPermission('EMPLOYEES', 'UPDATE'));
+  const canChangeStatus = !isEmployeeUser && (isAdmin || checkPermission('EMPLOYEES', 'UPDATE_STATUS'));
+  const canDelete = !isEmployeeUser && (isAdmin || checkPermission('EMPLOYEES', 'DELETE'));
 
   const fetchEmployee = useCallback(async () => {
     if (!id) return;
@@ -70,20 +71,46 @@ export const EmployeeDetailPage: React.FC = () => {
       const data = await employeesApi.getEmployee(id);
       setEmployee(data);
 
-      const [contractData, scheduleData, policiesData] = await Promise.all([
+      const [contractData, scheduleData, policiesData, employeeContracts] = await Promise.all([
         contractsApi.getEffectiveContract(Number(id)).catch(() => null),
         schedulesApi.getEffectiveSchedule(Number(id)).catch(() => null),
         attendanceApi.listPolicies().catch(() => []),
+        contractsApi.listContracts({ employee_id: Number(id) }).catch(() => []),
       ]);
 
-      setEffectiveContract(contractData);
-      setEffectiveSchedule(scheduleData);
+      // Effective contract or fallback to active contract for THIS employee
+      let finalContract = contractData;
+      if (!finalContract && employeeContracts && employeeContracts.length > 0) {
+        finalContract = (employeeContracts.find((c) => c.status === 'ACTIVE') || employeeContracts[0]) as any;
+      }
+      setEffectiveContract(finalContract);
 
-      if (scheduleData?.attendance_policy_id && policiesData.length > 0) {
-        const found = policiesData.find((p) => p.policy_id === scheduleData.attendance_policy_id);
-        setAssignedPolicy(found || policiesData[0] || null);
-      } else if (policiesData.length > 0) {
-        setAssignedPolicy(policiesData[0]);
+      // Effective schedule
+      let finalSchedule = scheduleData;
+      const fallbackScheduleId = finalContract?.schedule_id || (data as any)?.schedule_id;
+      if (!finalSchedule && fallbackScheduleId) {
+        try {
+          finalSchedule = await schedulesApi.getSchedule(fallbackScheduleId);
+        } catch {
+          // ignore
+        }
+      }
+      setEffectiveSchedule(finalSchedule);
+
+      // Resolve attendance policy strictly from the employee's assigned schedule
+      const policyId = finalSchedule?.attendance_policy_id;
+      if (policyId) {
+        let found = policiesData.find((p) => p.policy_id === policyId);
+        if (!found) {
+          try {
+            found = await attendanceApi.getPolicy(policyId);
+          } catch {
+            // ignore
+          }
+        }
+        setAssignedPolicy(found || null);
+      } else {
+        setAssignedPolicy(null);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to load employee details';
@@ -91,7 +118,7 @@ export const EmployeeDetailPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [id]);
+  }, [id, isAdmin, checkPermission]);
 
   useEffect(() => {
     fetchEmployee();
@@ -419,17 +446,28 @@ export const EmployeeDetailPage: React.FC = () => {
             )}
           </div>
 
-          <div className="pt-3">
+          <div className="pt-3 flex flex-col gap-2">
             {effectiveContract ? (
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<Eye className="w-4 h-4" />}
-                onClick={() => navigate(`/contracts/${effectiveContract.contract_id}`)}
-                className="w-full"
-              >
-                View Full Contract Details
-              </Button>
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  leftIcon={<Eye className="w-4 h-4" />}
+                  onClick={() => setIsContractModalOpen(true)}
+                  className="w-full"
+                >
+                  View Full Contract Details
+                </Button>
+                {canUpdate && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/contracts')}
+                    className="text-xs text-[#64748B] hover:text-[#2563EB] text-center font-medium transition-colors"
+                  >
+                    Manage Contracts →
+                  </button>
+                )}
+              </>
             ) : (
               canUpdate && (
                 <Button
@@ -478,15 +516,40 @@ export const EmployeeDetailPage: React.FC = () => {
             )}
           </div>
 
-          <div className="pt-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate('/working-schedules')}
-              className="w-full"
-            >
-              Manage Working Schedules
-            </Button>
+          <div className="pt-3 flex flex-col gap-2">
+            {effectiveSchedule ? (
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  leftIcon={<Eye className="w-4 h-4" />}
+                  onClick={() => setIsScheduleModalOpen(true)}
+                  className="w-full"
+                >
+                  View Full Schedule Details
+                </Button>
+                {canUpdate && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/working-schedules')}
+                    className="text-xs text-[#64748B] hover:text-[#2563EB] text-center font-medium transition-colors"
+                  >
+                    Manage Working Schedules →
+                  </button>
+                )}
+              </>
+            ) : (
+              canUpdate && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/working-schedules')}
+                  className="w-full"
+                >
+                  Manage Working Schedules
+                </Button>
+              )
+            )}
           </div>
         </div>
 
@@ -527,26 +590,39 @@ export const EmployeeDetailPage: React.FC = () => {
             )}
           </div>
 
-          <div className="pt-3">
+          <div className="pt-3 flex flex-col gap-2">
             {assignedPolicy ? (
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<Eye className="w-4 h-4" />}
-                onClick={() => setIsPolicyModalOpen(true)}
-                className="w-full"
-              >
-                View Full Policy Details
-              </Button>
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  leftIcon={<Eye className="w-4 h-4" />}
+                  onClick={() => setIsPolicyModalOpen(true)}
+                  className="w-full"
+                >
+                  View Full Policy Details
+                </Button>
+                {canUpdate && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/attendance-policies')}
+                    className="text-xs text-[#64748B] hover:text-[#2563EB] text-center font-medium transition-colors"
+                  >
+                    Manage Policies →
+                  </button>
+                )}
+              </>
             ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate('/attendance-policies')}
-                className="w-full"
-              >
-                Manage Policies
-              </Button>
+              canUpdate && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/attendance-policies')}
+                  className="w-full"
+                >
+                  Manage Policies
+                </Button>
+              )
             )}
           </div>
         </div>
@@ -611,6 +687,98 @@ export const EmployeeDetailPage: React.FC = () => {
               <Button
                 variant="secondary"
                 onClick={() => setIsContractModalOpen(false)}
+              >
+                Close Details
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULL WORKING SCHEDULE DETAILS MODAL */}
+      {isScheduleModalOpen && effectiveSchedule && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-xl max-w-xl w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
+              <div className="flex items-center gap-2 text-[#0F172A]">
+                <Clock className="w-5 h-5 text-[#2563EB]" />
+                <h3 className="text-lg font-bold">Schedule Details — {effectiveSchedule.name}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsScheduleModalOpen(false)}
+                className="text-[#64748B] hover:text-[#0F172A] p-1 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 p-3.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0] text-xs">
+              <div>
+                <span className="text-[#64748B]">Weekly Work Hours:</span>
+                <p className="font-bold text-sm text-[#0F172A]">{effectiveSchedule.hours_per_week} Hours / Week</p>
+              </div>
+              <div>
+                <span className="text-[#64748B]">Working Days:</span>
+                <p className="font-bold text-sm text-[#0F172A]">
+                  {effectiveSchedule.days?.filter((d) => d.is_working_day).length || 0} Operating Days
+                </p>
+              </div>
+              <div>
+                <span className="text-[#64748B]">Timezone:</span>
+                <p className="font-medium text-[#0F172A]">{effectiveSchedule.timezone || 'UTC'}</p>
+              </div>
+              <div>
+                <span className="text-[#64748B]">Attendance Policy:</span>
+                <p className="font-medium text-[#0F172A]">{assignedPolicy?.name || (effectiveSchedule as any).attendance_policy_name || 'Standard Attendance Policy'}</p>
+              </div>
+            </div>
+
+            {/* Daily Breakdown */}
+            <div>
+              <h4 className="text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-2">
+                Weekly Operating Shifts
+              </h4>
+              <div className="border border-[#E2E8F0] rounded-xl overflow-hidden divide-y divide-slate-100 text-xs">
+                {([1, 2, 3, 4, 5, 6, 7] as const).map((dayNum) => {
+                  const dayNames = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                  const dayConfig = effectiveSchedule.days?.find((d) => d.day_of_week === dayNum);
+                  const isWorking = Boolean(dayConfig?.is_working_day);
+
+                  return (
+                    <div key={dayNum} className={`flex items-center justify-between p-2.5 px-3.5 ${isWorking ? 'bg-white' : 'bg-slate-50/70 text-[#94A3B8]'}`}>
+                      <div className="flex items-center gap-2.5 w-28">
+                        <span className="font-medium text-[#0F172A]">{dayNames[dayNum]}</span>
+                      </div>
+                      <div>
+                        {isWorking ? (
+                          <Badge variant="success">Working Day</Badge>
+                        ) : (
+                          <Badge variant="neutral">Rest Day</Badge>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        {isWorking ? (
+                          <div className="font-mono text-[#0F172A]">
+                            <span>{dayConfig?.start_time?.slice(0, 5) || '09:00'} - {dayConfig?.end_time?.slice(0, 5) || '18:00'}</span>
+                            {dayConfig?.break_minutes ? (
+                              <span className="text-[#64748B] ml-2 font-sans text-[11px]">({dayConfig.break_minutes}m break)</span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-[#94A3B8] italic">Off</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button
+                variant="secondary"
+                onClick={() => setIsScheduleModalOpen(false)}
               >
                 Close Details
               </Button>

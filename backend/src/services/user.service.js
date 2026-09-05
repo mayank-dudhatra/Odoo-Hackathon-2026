@@ -1,7 +1,7 @@
 const { query } = require("../db");
 const { AppError, sanitizeUser } = require("../utils/http");
 const { createAuditLog } = require("./audit.service");
-const { getRoleByName } = require("./rbac.service");
+const { getRoleByName, getRolePermissions } = require("./rbac.service");
 
 async function ensureEmployeeBelongsToCompany(companyId, employeeId) {
   if (!employeeId) {
@@ -22,7 +22,55 @@ function sanitizeUserRow(row) {
   return sanitizeUser(row);
 }
 
-async function listCompanyUsers(companyId) {
+async function listCompanyUsers(companyId, filters = {}) {
+  const where = ["u.company_id = $1"];
+  const values = [companyId];
+  let index = 2;
+
+  if (filters.search && filters.search.trim()) {
+    const s = `%${filters.search.trim()}%`;
+    where.push(`(
+      u.username ILIKE $${index} OR
+      u.email ILIKE $${index} OR
+      e.employee_code ILIKE $${index} OR
+      e.first_name ILIKE $${index} OR
+      e.last_name ILIKE $${index} OR
+      CONCAT(e.first_name, ' ', e.last_name) ILIKE $${index}
+    )`);
+    values.push(s);
+    index += 1;
+  }
+
+  if (filters.role_id) {
+    where.push(`u.role_id = $${index}`);
+    values.push(filters.role_id);
+    index += 1;
+  }
+
+  if (filters.status) {
+    where.push(`u.status = $${index}`);
+    values.push(filters.status);
+    index += 1;
+  }
+
+  if (filters.is_verified !== undefined && filters.is_verified !== "") {
+    const isVerified = String(filters.is_verified) === "true";
+    if (isVerified) {
+      where.push(`u.email_verified_at IS NOT NULL`);
+    } else {
+      where.push(`u.email_verified_at IS NULL`);
+    }
+  }
+
+  if (filters.is_linked !== undefined && filters.is_linked !== "") {
+    const isLinked = String(filters.is_linked) === "true";
+    if (isLinked) {
+      where.push(`u.employee_id IS NOT NULL`);
+    } else {
+      where.push(`u.employee_id IS NULL`);
+    }
+  }
+
   const result = await query(
     `
       SELECT
@@ -32,6 +80,7 @@ async function listCompanyUsers(companyId) {
         e.employee_code,
         e.first_name,
         e.last_name,
+        CONCAT(e.first_name, ' ', e.last_name) AS employee_name,
         u.username,
         u.email,
         u.role_id,
@@ -45,13 +94,35 @@ async function listCompanyUsers(companyId) {
       FROM users u
       JOIN roles r ON r.role_id = u.role_id
       LEFT JOIN employees e ON e.employee_id = u.employee_id
-      WHERE u.company_id = $1
+      WHERE ${where.join(" AND ")}
       ORDER BY u.created_at DESC
+    `,
+    values
+  );
+
+  return result.rows.map(sanitizeUserRow);
+}
+
+async function getCompanyUsersSummary(companyId) {
+  const result = await query(
+    `
+      SELECT
+        COUNT(*)::int AS total_users,
+        COUNT(*) FILTER (WHERE status = 'ACTIVE')::int AS active_users,
+        COUNT(*) FILTER (WHERE status = 'INVITED')::int AS invited_users,
+        COUNT(*) FILTER (WHERE status = 'DISABLED')::int AS disabled_users
+      FROM users
+      WHERE company_id = $1
     `,
     [companyId]
   );
 
-  return result.rows.map(sanitizeUserRow);
+  return result.rows[0] || {
+    total_users: 0,
+    active_users: 0,
+    invited_users: 0,
+    disabled_users: 0,
+  };
 }
 
 async function getCompanyUserById(companyId, userId) {
@@ -64,6 +135,11 @@ async function getCompanyUserById(companyId, userId) {
         e.employee_code,
         e.first_name,
         e.last_name,
+        CONCAT(e.first_name, ' ', e.last_name) AS employee_name,
+        d.name AS department_name,
+        p.title AS position_name,
+        et.name AS employee_type_name,
+        e.status AS employee_status,
         u.username,
         u.email,
         u.role_id,
@@ -77,13 +153,20 @@ async function getCompanyUserById(companyId, userId) {
       FROM users u
       JOIN roles r ON r.role_id = u.role_id
       LEFT JOIN employees e ON e.employee_id = u.employee_id
+      LEFT JOIN departments d ON d.department_id = e.department_id
+      LEFT JOIN positions p ON p.position_id = e.position_id
+      LEFT JOIN employee_types et ON et.employee_type_id = e.employee_type_id
       WHERE u.company_id = $1 AND u.user_id = $2
       LIMIT 1
     `,
     [companyId, userId]
   );
 
-  return sanitizeUserRow(result.rows[0] || null);
+  const user = sanitizeUserRow(result.rows[0] || null);
+  if (user && user.role_id) {
+    user.permissions = await getRolePermissions(user.role_id);
+  }
+  return user;
 }
 
 async function setUserStatus({ actor, userId, status }) {
@@ -227,6 +310,7 @@ async function relinkUserEmployee({ actor, userId, employeeId }) {
 module.exports = {
   ensureEmployeeBelongsToCompany,
   listCompanyUsers,
+  getCompanyUsersSummary,
   getCompanyUserById,
   setUserStatus,
   changeUserRole,

@@ -124,6 +124,11 @@ export const payrollApi = {
     return extractData<Payslip>(res);
   },
 
+  getMyPayslips: async (): Promise<Payslip[]> => {
+    const res = await apiClient<any>('/payslips/my');
+    return extractData<Payslip[]>(res) || [];
+  },
+
   getEmployeePayslips: async (employeeId: number): Promise<Payslip[]> => {
     const res = await apiClient<any>(`/employees/${employeeId}/payslips`);
     return extractData<Payslip[]>(res) || [];

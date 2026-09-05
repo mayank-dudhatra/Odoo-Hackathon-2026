@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { Loader2 } from 'lucide-react';
 import { ForbiddenPage } from '../../pages/error/ForbiddenPage';
@@ -14,7 +14,6 @@ interface ProtectedRouteProps {
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredPermission }) => {
   const { isAuthenticated, isLoading, checkPermission, role } = useAuth();
-  const location = useLocation();
 
   if (isLoading) {
     return (

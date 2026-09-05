@@ -12,6 +12,7 @@ export interface User {
   role_id: number;
   role_name: string;
   status: UserStatus;
+  must_change_password?: boolean;
   invitation_expires_at?: string | null;
   email_verified_at?: string | null;
   last_login_at?: string | null;
@@ -20,7 +21,13 @@ export interface User {
   // Optional employee details when populated
   first_name?: string | null;
   last_name?: string | null;
+  employee_name?: string | null;
   employee_code?: string | null;
+  department_name?: string | null;
+  position_name?: string | null;
+  employee_type_name?: string | null;
+  employee_status?: string | null;
+  permissions?: RolePermission[];
 }
 
 export interface LoginCredentials {
@@ -33,6 +40,7 @@ export interface LoginResponse {
   access_token: string;
   refresh_token: string;
   refresh_expires_at?: string;
+  must_change_password?: boolean;
   user: User;
   permissions?: RolePermission[];
 }

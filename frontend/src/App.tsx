@@ -1,21 +1,22 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { AppLayout } from './components/layout/AppLayout';
-import { useAuth } from './hooks/useAuth';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 
 function RoleHomeRedirect() {
-  const { role, user } = useAuth();
-  if (role === 'Admin') return <Navigate to="/users" replace />;
-  if (role === 'HR Manager') return <Navigate to="/employees" replace />;
-  if (role === 'Payroll Manager' || role === 'Payroll User') return <Navigate to="/payroll/payruns" replace />;
-  if (role === 'Employee') return <Navigate to={user?.employee_id ? `/employees/${user.employee_id}` : "/time-off"} replace />;
-  return <Navigate to="/employees" replace />;
+  return <Navigate to="/dashboard" replace />;
 }
+
+// Dashboard Page
+import { DashboardPage } from './pages/dashboard/DashboardPage';
+
+// Profile Page
+import { UserProfilePage } from './pages/profile/UserProfilePage';
 
 // Phase 1 Pages
 import { LoginPage } from './pages/auth/LoginPage';
 import { UsersPage } from './pages/users/UsersPage';
+import { UserDetailPage } from './pages/users/UserDetailPage';
 import { RolesPage } from './pages/roles/RolesPage';
 import { PermissionsPage } from './pages/permissions/PermissionsPage';
 import { ForbiddenPage } from './pages/error/ForbiddenPage';
@@ -72,6 +73,12 @@ function App() {
             }
           >
             <Route index element={<RoleHomeRedirect />} />
+
+            {/* Role-Aware User Dashboard */}
+            <Route path="/dashboard" element={<DashboardPage />} />
+
+            {/* User Profile */}
+            <Route path="/profile" element={<UserProfilePage />} />
 
             {/* Phase 2: Employee & Organization Routes */}
             <Route
@@ -275,6 +282,15 @@ function App() {
               element={
                 <ProtectedRoute requiredPermission={{ module: 'USERS', action: 'READ' }}>
                   <UsersPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/users/:id"
+              element={
+                <ProtectedRoute requiredPermission={{ module: 'USERS', action: 'READ' }}>
+                  <UserDetailPage />
                 </ProtectedRoute>
               }
             />

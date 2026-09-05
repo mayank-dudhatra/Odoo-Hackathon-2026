@@ -444,12 +444,14 @@ async function activateInvitation({ token, password }) {
   });
 }
 
-async function changePassword({ userId, companyId, currentPassword, newPassword }) {
+async function changePassword({ userId, companyId, currentPassword, newPassword, currentSessionId = null }) {
   const result = await query(
     `
-      SELECT user_id, password_hash, must_change_password
-      FROM users
-      WHERE user_id = $1 AND company_id = $2
+      SELECT u.user_id, u.company_id, u.employee_id, u.username, u.email, u.role_id, r.role_name,
+             u.status, u.password_hash, u.must_change_password
+      FROM users u
+      JOIN roles r ON r.role_id = u.role_id
+      WHERE u.user_id = $1 AND u.company_id = $2
       LIMIT 1
     `,
     [userId, companyId]
@@ -484,14 +486,26 @@ async function changePassword({ userId, companyId, currentPassword, newPassword 
     [newHash, userId]
   );
 
-  await query(
-    `
-      UPDATE user_sessions
-      SET revoked_at = NOW(), updated_at = NOW()
-      WHERE user_id = $1 AND revoked_at IS NULL
-    `,
-    [userId]
-  );
+  // If currentSessionId is provided, revoke other sessions while preserving current session
+  if (currentSessionId) {
+    await query(
+      `
+        UPDATE user_sessions
+        SET revoked_at = NOW(), updated_at = NOW()
+        WHERE user_id = $1 AND session_id != $2 AND revoked_at IS NULL
+      `,
+      [userId, currentSessionId]
+    );
+  } else {
+    await query(
+      `
+        UPDATE user_sessions
+        SET revoked_at = NOW(), updated_at = NOW()
+        WHERE user_id = $1 AND revoked_at IS NULL
+      `,
+      [userId]
+    );
+  }
 
   await createAuditLog({
     companyId,
@@ -501,10 +515,27 @@ async function changePassword({ userId, companyId, currentPassword, newPassword 
     recordId: userId,
   });
 
+  // Sign fresh access token with must_change_password: false
+  const accessToken = signAccessToken({
+    sub: user.user_id,
+    company_id: user.company_id,
+    role_id: user.role_id,
+    role_name: user.role_name,
+    sid: currentSessionId || null,
+    must_change_password: false,
+  });
+
+  const updatedProfile = await getCurrentUserProfile(userId, companyId);
+
   return {
     password_changed: true,
     must_change_password: false,
-    message: "Password changed successfully. Please log in again with your new password.",
+    access_token: accessToken,
+    user: updatedProfile?.user || {
+      ...user,
+      must_change_password: false,
+    },
+    message: "Password changed successfully.",
   };
 }
 
@@ -722,6 +753,7 @@ async function getCurrentUserProfile(userId, companyId) {
         u.role_id,
         r.role_name,
         u.status,
+        u.must_change_password,
         u.invitation_expires_at,
         u.email_verified_at,
         u.last_login_at,

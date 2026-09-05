@@ -150,6 +150,11 @@ export async function apiClient<T = unknown>(endpoint: string, options: RequestO
     }
     const message = errorData?.error?.message || 'Access denied. You do not have permission to perform this action.';
     const code = errorData?.error?.code || 'FORBIDDEN';
+
+    if (code === 'MUST_CHANGE_PASSWORD') {
+      window.dispatchEvent(new CustomEvent('pp360:must-change-password'));
+    }
+
     throw new ApiError(403, message, code);
   }
 

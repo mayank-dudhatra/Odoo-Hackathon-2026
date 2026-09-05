@@ -111,8 +111,12 @@ async function maybeActivateEmployeeSchedule(companyId, employeeId, scheduleId, 
   }
 }
 
-async function listCompanyContracts(auth, filters) {
-  return listContracts(auth.company_id, filters);
+async function listCompanyContracts(auth, filters = {}) {
+  const queryFilters = { ...filters };
+  if (auth?.role_name === "Employee" || (auth?.permission && auth?.permission.scope === "OWN")) {
+    queryFilters.employee_id = auth.employee_id || -1;
+  }
+  return listContracts(auth.company_id, queryFilters);
 }
 
 async function getCompanyContract(auth, contractId) {

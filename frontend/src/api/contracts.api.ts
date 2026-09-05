@@ -6,8 +6,11 @@ import type {
 } from '../types/contracts';
 
 export const contractsApi = {
-  async listContracts(params?: { status?: string }): Promise<Contract[]> {
-    const qs = params?.status ? `?status=${params.status}` : '';
+  async listContracts(params?: { status?: string; employee_id?: number | string }): Promise<Contract[]> {
+    const query = new URLSearchParams();
+    if (params?.status) query.append('status', params.status);
+    if (params?.employee_id) query.append('employee_id', String(params.employee_id));
+    const qs = query.toString() ? `?${query.toString()}` : '';
     const res = await apiClient<{ data: Contract[] } | Contract[]>(`/contracts${qs}`);
     if (Array.isArray(res)) return res;
     if (res && 'data' in res && Array.isArray(res.data)) return res.data;

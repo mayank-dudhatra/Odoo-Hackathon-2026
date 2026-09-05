@@ -8,6 +8,29 @@ function requirePermission(moduleName, actionName, options = {}) {
         throw new AppError(401, "Authentication required", "AUTH_REQUIRED");
       }
 
+      // Admin has full access
+      if (req.auth.role_name === "Admin") {
+        req.permission = {
+          module: moduleName,
+          action: actionName,
+          scope: "ALL",
+        };
+        return next();
+      }
+
+      // If ownResolver is provided and returns true, allow access with OWN scope
+      if (typeof options.ownResolver === "function") {
+        const isOwn = await options.ownResolver(req);
+        if (isOwn) {
+          req.permission = {
+            module: moduleName,
+            action: actionName,
+            scope: "OWN",
+          };
+          return next();
+        }
+      }
+
       const scope = await getPermissionScope(req.auth.role_id, moduleName, actionName);
       if (!scope) {
         throw new AppError(403, "Forbidden", "PERMISSION_DENIED");
