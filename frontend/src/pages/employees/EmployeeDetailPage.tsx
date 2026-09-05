@@ -12,13 +12,20 @@ import {
   UserCheck,
   Edit2,
   Trash2,
+  Clock,
+  FileText,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { ErrorAlert } from '../../components/common/States';
 import { employeesApi } from '../../api/employees.api';
+import { contractsApi } from '../../api/contracts.api';
+import { schedulesApi } from '../../api/schedules.api';
 import type { Employee, EmployeeStatus } from '../../types/organization';
+import type { EffectiveContract } from '../../types/contracts';
+import type { WorkingSchedule } from '../../types/schedules';
+import { formatCurrency, formatDate } from '../../utils/format';
 import { useAuth } from '../../hooks/useAuth';
 
 export const EmployeeDetailPage: React.FC = () => {
@@ -28,6 +35,8 @@ export const EmployeeDetailPage: React.FC = () => {
   const isAdmin = role === 'Admin';
 
   const [employee, setEmployee] = useState<Employee | null>(null);
+  const [effectiveContract, setEffectiveContract] = useState<EffectiveContract | null>(null);
+  const [effectiveSchedule, setEffectiveSchedule] = useState<WorkingSchedule | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +59,9 @@ export const EmployeeDetailPage: React.FC = () => {
     try {
       const data = await employeesApi.getEmployee(id);
       setEmployee(data);
+      // Also fetch effective contract and schedule
+      contractsApi.getEffectiveContract(Number(id)).then(setEffectiveContract).catch(() => setEffectiveContract(null));
+      schedulesApi.getEffectiveSchedule(Number(id)).then(setEffectiveSchedule).catch(() => setEffectiveSchedule(null));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to load employee details';
       setError(msg);
@@ -64,7 +76,11 @@ export const EmployeeDetailPage: React.FC = () => {
     (async () => {
       try {
         const data = await employeesApi.getEmployee(id);
-        if (active) setEmployee(data);
+        if (active) {
+          setEmployee(data);
+          contractsApi.getEffectiveContract(Number(id)).then((c) => active && setEffectiveContract(c)).catch(() => {});
+          schedulesApi.getEffectiveSchedule(Number(id)).then((s: WorkingSchedule) => active && setEffectiveSchedule(s)).catch(() => {});
+        }
       } catch (err: unknown) {
         if (active) {
           const msg = err instanceof Error ? err.message : 'Failed to load employee details';
@@ -352,6 +368,122 @@ export const EmployeeDetailPage: React.FC = () => {
               <span className="col-span-2">{getStatusBadge(employee.status)}</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Effective Contract & Working Schedule Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Effective Contract */}
+        <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-2xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-[#2563EB]" />
+              <h2 className="text-base font-bold text-[#0F172A]">Effective Contract (Today)</h2>
+            </div>
+            {effectiveContract && (
+              <Badge variant="success">Active</Badge>
+            )}
+          </div>
+
+          {effectiveContract ? (
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                <span className="text-[#64748B]">Wage Compensation:</span>
+                <span className="font-bold text-[#0F172A]">
+                  {formatCurrency(effectiveContract.wage)}
+                  <span className="text-xs text-[#64748B] font-normal ml-1">
+                    / {effectiveContract.wage_type?.toLowerCase() || 'month'}
+                  </span>
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                <span className="text-[#64748B]">Salary Structure:</span>
+                <span className="font-medium text-[#0F172A]">{effectiveContract.salary_structure_name || 'Standard'}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                <span className="text-[#64748B]">Contract Duration:</span>
+                <span className="text-[#0F172A] text-xs font-mono">
+                  {formatDate(effectiveContract.start_date)} → {effectiveContract.end_date ? formatDate(effectiveContract.end_date) : 'Indefinite'}
+                </span>
+              </div>
+              <div className="pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/contracts/${effectiveContract.contract_id}`)}
+                  className="w-full"
+                >
+                  View Contract Details
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="py-6 text-center text-sm text-[#64748B]">
+              <p>No active employment contract effective for today's date.</p>
+              {canUpdate && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/contracts')}
+                  className="mt-3"
+                >
+                  Manage Contracts
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Effective Working Schedule */}
+        <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-2xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-[#2563EB]" />
+              <h2 className="text-base font-bold text-[#0F172A]">Working Schedule (Today)</h2>
+            </div>
+            {effectiveSchedule && (
+              <Badge variant="info">{effectiveSchedule.timezone || 'UTC'}</Badge>
+            )}
+          </div>
+
+          {effectiveSchedule ? (
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                <span className="text-[#64748B]">Assigned Schedule:</span>
+                <span className="font-semibold text-[#0F172A]">{effectiveSchedule.name}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                <span className="text-[#64748B]">Weekly Operating Days:</span>
+                <span className="font-medium text-[#0F172A]">
+                  {effectiveSchedule.days?.filter((d) => d.is_working_day).length ?? 0} days / week
+                </span>
+              </div>
+              <div className="pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/working-schedules')}
+                  className="w-full"
+                >
+                  View Schedules
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="py-6 text-center text-sm text-[#64748B]">
+              <p>No working schedule assigned or resolved for this employee.</p>
+              {canUpdate && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/working-schedules')}
+                  className="mt-3"
+                >
+                  Assign Schedule
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
