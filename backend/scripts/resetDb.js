@@ -98,6 +98,18 @@ async function resetDb() {
     const adminUser = userRes.rows[0];
     console.log(`✔ Admin User Created: ${adminUser.username} (${adminUser.email})`);
 
+    console.log("5. Creating default Leave Types for company...");
+    await client.query(`
+      INSERT INTO leave_types (company_id, name, unit, requires_allocation, is_paid, default_days_year, approval_required, payroll_integration, is_active)
+      VALUES
+        ($1, 'Paid Time Off (PTO)', 'DAYS', TRUE, TRUE, 20, TRUE, TRUE, TRUE),
+        ($1, 'Sick Leave', 'DAYS', TRUE, TRUE, 10, TRUE, TRUE, TRUE),
+        ($1, 'Casual Leave', 'DAYS', TRUE, TRUE, 7, TRUE, TRUE, TRUE),
+        ($1, 'Unpaid Leave', 'DAYS', FALSE, FALSE, 0, TRUE, TRUE, TRUE)
+      ON CONFLICT DO NOTHING;
+    `, [company.company_id]);
+    console.log("✔ Default Leave Types Created");
+
     await client.query("COMMIT");
 
     console.log("\n=========================================================");
