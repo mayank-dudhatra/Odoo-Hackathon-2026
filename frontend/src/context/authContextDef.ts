@@ -7,7 +7,7 @@ export interface AuthContextType {
   permissions: RolePermission[];
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (credentials: LoginCredentials) => Promise<void>;
+  login: (credentials: LoginCredentials) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   checkPermission: (module: string, action: string) => boolean;

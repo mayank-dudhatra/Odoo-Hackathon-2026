@@ -13,11 +13,15 @@ const payrunRoutes = require("./payrun.routes");
 const payslipRoutes = require("./payslip.routes");
 const dashboardRoutes = require("./dashboard.routes");
 const reportRoutes = require("./report.routes");
+const roleRoutes = require("./role.routes");
+const permissionRoutes = require("./permission.routes");
 
 const router = express.Router();
 
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
+router.use("/roles", roleRoutes);
+router.use("/permissions", permissionRoutes);
 router.use("/org", organizationRoutes);
 router.use("/working-schedules", scheduleRoutes);
 router.use("/contracts", contractRoutes);

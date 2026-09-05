@@ -5,7 +5,7 @@ const { generateRandomToken, hashToken } = require("../utils/crypto");
 const { signAccessToken, generateRefreshToken } = require("../utils/tokens");
 const { env } = require("../config/env");
 const { createAuditLog } = require("./audit.service");
-const { getRoleByName } = require("./rbac.service");
+const { getRoleByName, getRolePermissions } = require("./rbac.service");
 const { sendPasswordResetEmail, sendUserInvitationEmail } = require("./email.service");
 
 function buildPublicUser(row) {
@@ -251,12 +251,15 @@ async function login({ identifier, password, ipAddress, userAgent }) {
     details: { session_id: sessionResult.rows[0].session_id },
   });
 
+  const permissions = await getRolePermissions(user.role_id);
+
   return {
     access_token: accessToken,
     refresh_token: refreshToken,
     refresh_expires_at: sessionResult.rows[0].expires_at,
     must_change_password: Boolean(user.must_change_password),
     user: buildPublicUser(user),
+    permissions,
   };
 }
 
@@ -692,7 +695,14 @@ async function getCurrentUserProfile(userId, companyId) {
     [userId, companyId]
   );
 
-  return buildPublicUser(result.rows[0] || null);
+  const user = buildPublicUser(result.rows[0] || null);
+  if (!user) return null;
+
+  const permissions = await getRolePermissions(user.role_id);
+  return {
+    user,
+    permissions,
+  };
 }
 
 async function requestPasswordReset({ email }) {

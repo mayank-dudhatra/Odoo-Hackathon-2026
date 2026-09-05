@@ -116,7 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [refreshUser]);
 
-  const login = async (credentials: LoginCredentials): Promise<void> => {
+  const login = async (credentials: LoginCredentials): Promise<User> => {
     setIsLoading(true);
     try {
       const response = await authApi.login(credentials);
@@ -134,6 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setPermissions(perms);
       localStorage.setItem(PERMISSIONS_STORAGE_KEY, JSON.stringify(perms));
+      return loggedInUser;
     } finally {
       setIsLoading(false);
     }

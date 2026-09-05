@@ -72,10 +72,43 @@ async function replaceRolePermissions(roleId, permissions) {
   });
 }
 
+async function getRoleById(roleId) {
+  const result = await query(
+    `SELECT role_id, role_name, description, created_at FROM roles WHERE role_id = $1`,
+    [roleId]
+  );
+  return result.rows[0] || null;
+}
+
+async function createRole(roleName, description = null) {
+  const result = await query(
+    `INSERT INTO roles (role_name, description) VALUES ($1, $2) RETURNING role_id, role_name, description, created_at`,
+    [roleName, description]
+  );
+  return result.rows[0];
+}
+
+async function updateRole(roleId, fields = {}) {
+  const result = await query(
+    `UPDATE roles SET role_name = COALESCE($1, role_name), description = COALESCE($2, description) WHERE role_id = $3 RETURNING role_id, role_name, description, created_at`,
+    [fields.role_name || null, fields.description !== undefined ? fields.description : null, roleId]
+  );
+  return result.rows[0] || null;
+}
+
+async function deleteRole(roleId) {
+  await query(`DELETE FROM roles WHERE role_id = $1`, [roleId]);
+  return { success: true };
+}
+
 module.exports = {
   getRoleByName,
+  getRoleById,
   getPermissionScope,
   listRoles,
+  createRole,
+  updateRole,
+  deleteRole,
   listPermissions,
   getRolePermissions,
   replaceRolePermissions,
