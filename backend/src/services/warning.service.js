@@ -11,9 +11,11 @@ async function getAllDashboardWarningsService(companyId, actorUser) {
     throw new AppError(403, "Employees are not authorized to view management dashboard warnings.", "ACCESS_DENIED");
   }
 
-  const missingData = await getMissingDataWarnings(companyId);
-  const duplicates = await getDuplicatePayslipWarnings(companyId);
-  const contractAttention = await getContractAttentionWarnings(companyId);
+  const [missingData, duplicates, contractAttention] = await Promise.all([
+    getMissingDataWarnings(companyId),
+    getDuplicatePayslipWarnings(companyId),
+    getContractAttentionWarnings(companyId),
+  ]);
 
   const totalWarningsCount =
     missingData.missing_contract.length +

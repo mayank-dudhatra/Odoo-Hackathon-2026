@@ -19,11 +19,13 @@ const router = express.Router();
 
 router.use(authenticate, loadCompanyContext);
 
-router.get("/", requirePermission("WORKING_SCHEDULES", "READ"), listWorkingSchedules);
+const { cacheResponse, invalidateCache } = require("../middleware/cache.middleware");
+
+router.get("/", requirePermission("WORKING_SCHEDULES", "READ"), cacheResponse(120, "schedules"), listWorkingSchedules);
 router.get("/:id", requirePermission("WORKING_SCHEDULES", "READ"), validateRequest({ params: idParam }), getWorkingSchedule);
-router.post("/", requirePermission("WORKING_SCHEDULES", "CREATE"), validateRequest({ body: scheduleSchema }), createWorkingScheduleHandler);
-router.patch("/:id", requirePermission("WORKING_SCHEDULES", "UPDATE"), validateRequest({ params: idParam, body: scheduleUpdateSchema }), updateWorkingScheduleHandler);
-router.delete("/:id", requirePermission("WORKING_SCHEDULES", "DELETE"), validateRequest({ params: idParam }), deactivateWorkingScheduleHandler);
+router.post("/", requirePermission("WORKING_SCHEDULES", "CREATE"), invalidateCache(["schedules", "dashboard"]), validateRequest({ body: scheduleSchema }), createWorkingScheduleHandler);
+router.patch("/:id", requirePermission("WORKING_SCHEDULES", "UPDATE"), invalidateCache(["schedules", "dashboard"]), validateRequest({ params: idParam, body: scheduleUpdateSchema }), updateWorkingScheduleHandler);
+router.delete("/:id", requirePermission("WORKING_SCHEDULES", "DELETE"), invalidateCache(["schedules", "dashboard"]), validateRequest({ params: idParam }), deactivateWorkingScheduleHandler);
 
 router.patch(
   "/employees/:employeeId/assign",

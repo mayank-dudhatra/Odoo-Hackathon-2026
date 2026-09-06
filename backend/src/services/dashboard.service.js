@@ -7,6 +7,7 @@ const {
 const { getAllDashboardWarningsService } = require("./warning.service");
 const { createAuditLog } = require("./audit.service");
 const { AppError } = require("../utils/http");
+const { dashboardCache } = require("../utils/cache");
 
 function assertManagementRole(actorUser) {
   if (actorUser.role_name === "Employee") {
@@ -77,21 +78,28 @@ async function getTimeOffDashboardService(companyId, filters, actorUser) {
 async function getOverallManagementDashboardService(companyId, filters, actorUser) {
   assertManagementRole(actorUser);
 
-  const payroll = await getPayrollDashboardMetrics(companyId, filters);
-  const hr = await getHrDashboardMetrics(companyId, filters);
-  const time = await getTimeDashboardMetrics(companyId, filters);
-  const costs = await getCostDashboardMetrics(companyId, filters);
-  const warnings = await getAllDashboardWarningsService(companyId, actorUser);
+  const cacheKey = `dashboard:overall:${companyId}:${JSON.stringify(filters)}`;
+  const cached = dashboardCache.get(cacheKey);
+  if (cached) return cached;
 
-  await createAuditLog({
+  const [payroll, hr, time, costs, warnings] = await Promise.all([
+    getPayrollDashboardMetrics(companyId, filters),
+    getHrDashboardMetrics(companyId, filters),
+    getTimeDashboardMetrics(companyId, filters),
+    getCostDashboardMetrics(companyId, filters),
+    getAllDashboardWarningsService(companyId, actorUser),
+  ]);
+
+  // Non-blocking audit log
+  createAuditLog({
     companyId,
     userId: actorUser.user_id,
     module: "DASHBOARD",
     action: "DASHBOARD_ACCESSED",
     details: { dashboard_type: "OVERALL_MANAGEMENT", filters },
-  });
+  }).catch(() => {});
 
-  return {
+  const data = {
     payroll,
     hr,
     time_off: time.time_off,
@@ -99,6 +107,9 @@ async function getOverallManagementDashboardService(companyId, filters, actorUse
     costs,
     warnings,
   };
+
+  dashboardCache.set(cacheKey, data, 20);
+  return data;
 }
 
 module.exports = {

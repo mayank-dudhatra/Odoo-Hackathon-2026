@@ -27,11 +27,13 @@ router.post("/setup", authLimiter, validateRequest({ body: initialSetupSchema })
 router.post("/login", loginLimiter, validateRequest({ body: z.object({ identifier: z.string().min(3), password: z.string().min(8) }) }), signIn);
 router.post("/forgot-password", passwordResetLimiter, validateRequest({ body: forgotPasswordSchema }), forgotPassword);
 router.post("/reset-password", passwordResetLimiter, validateRequest({ body: resetPasswordSchema }), resetPasswordHandler);
+const { cacheResponse, invalidateCache } = require("../middleware/cache.middleware");
+
 router.post("/refresh", authLimiter, validateRequest({ body: z.object({ refresh_token: z.string().min(10) }) }), refresh);
 router.post("/activate", authLimiter, validateRequest({ body: z.object({ token: z.string().min(20), password: z.string().min(8) }) }), activate);
-router.post("/logout", authenticate, authLimiter, validateRequest({ body: z.object({ refresh_token: z.string().min(10).optional() }) }), signOut);
-router.post("/logout-all", authenticate, authLimiter, signOutAll);
-router.get("/me", authenticate, me);
+router.post("/logout", authenticate, authLimiter, invalidateCache(["auth_me"]), validateRequest({ body: z.object({ refresh_token: z.string().min(10).optional() }) }), signOut);
+router.post("/logout-all", authenticate, authLimiter, invalidateCache(["auth_me"]), signOutAll);
+router.get("/me", authenticate, cacheResponse(60, "auth_me"), me);
 router.post(
   "/change-password",
   authenticate,

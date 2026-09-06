@@ -106,22 +106,28 @@ export const leaveApi = {
     return res as LeaveRequest;
   },
 
-  async approveLeaveRequest(id: number | string, remarks?: string): Promise<LeaveRequest> {
+  async approveLeaveRequest(id: number | string, remarks?: string | { comments?: string }): Promise<LeaveRequest> {
+    const remarksStr = typeof remarks === 'object' && remarks !== null ? remarks.comments : remarks;
     const res = await apiClient<{ data: LeaveRequest } | LeaveRequest>(`/leave-requests/${id}/approve`, {
       method: 'PATCH',
-      body: JSON.stringify({ remarks: remarks || 'Approved' }),
+      body: JSON.stringify({ remarks: remarksStr || 'Approved' }),
     });
     if (res && 'data' in res && res.data) return res.data;
     return res as LeaveRequest;
   },
 
-  async refuseLeaveRequest(id: number | string, remarks?: string): Promise<LeaveRequest> {
+  async refuseLeaveRequest(id: number | string, remarks?: string | { comments?: string }): Promise<LeaveRequest> {
+    const remarksStr = typeof remarks === 'object' && remarks !== null ? remarks.comments : remarks;
     const res = await apiClient<{ data: LeaveRequest } | LeaveRequest>(`/leave-requests/${id}/refuse`, {
       method: 'PATCH',
-      body: JSON.stringify({ remarks: remarks || 'Refused' }),
+      body: JSON.stringify({ remarks: remarksStr || 'Refused' }),
     });
     if (res && 'data' in res && res.data) return res.data;
     return res as LeaveRequest;
+  },
+
+  async rejectLeaveRequest(id: number | string, remarks?: string | { comments?: string }): Promise<LeaveRequest> {
+    return this.refuseLeaveRequest(id, remarks);
   },
 
   async cancelLeaveRequest(id: number | string): Promise<LeaveRequest> {

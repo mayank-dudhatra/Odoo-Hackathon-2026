@@ -47,29 +47,31 @@ router.use(authenticate, loadCompanyContext);
 router.get("/company/me", requirePermission("COMPANY", "READ"), currentCompany);
 router.put("/company/me", requirePermission("COMPANY", "UPDATE"), validateRequest({ body: companyUpdateSchema }), updateCompanyDetails);
 
-router.get("/departments", requirePermission("DEPARTMENTS", "READ"), listDepartments);
+const { cacheResponse, invalidateCache } = require("../middleware/cache.middleware");
+
+router.get("/departments", requirePermission("DEPARTMENTS", "READ"), cacheResponse(120, "departments"), listDepartments);
 router.get("/departments/:id", requirePermission("DEPARTMENTS", "READ"), validateRequest({ params: idParam }), getDepartment);
-router.post("/departments", requirePermission("DEPARTMENTS", "CREATE"), validateRequest({ body: departmentSchema }), createDepartment);
-router.patch("/departments/:id", requirePermission("DEPARTMENTS", "UPDATE"), validateRequest({ params: idParam, body: departmentSchema.partial() }), updateDepartment);
-router.delete("/departments/:id", requirePermission("DEPARTMENTS", "DELETE"), validateRequest({ params: idParam }), deactivateDepartment);
-router.patch("/departments/:id/deactivate", requirePermission("DEPARTMENTS", "DELETE"), validateRequest({ params: idParam }), deactivateDepartment);
+router.post("/departments", requirePermission("DEPARTMENTS", "CREATE"), invalidateCache(["departments", "dashboard"]), validateRequest({ body: departmentSchema }), createDepartment);
+router.patch("/departments/:id", requirePermission("DEPARTMENTS", "UPDATE"), invalidateCache(["departments", "dashboard"]), validateRequest({ params: idParam, body: departmentSchema.partial() }), updateDepartment);
+router.delete("/departments/:id", requirePermission("DEPARTMENTS", "DELETE"), invalidateCache(["departments", "dashboard"]), validateRequest({ params: idParam }), deactivateDepartment);
+router.patch("/departments/:id/deactivate", requirePermission("DEPARTMENTS", "DELETE"), invalidateCache(["departments", "dashboard"]), validateRequest({ params: idParam }), deactivateDepartment);
 
-router.get("/positions", requirePermission("POSITIONS", "READ"), listPositions);
+router.get("/positions", requirePermission("POSITIONS", "READ"), cacheResponse(120, "positions"), listPositions);
 router.get("/positions/:id", requirePermission("POSITIONS", "READ"), validateRequest({ params: idParam }), getPosition);
-router.post("/positions", requirePermission("POSITIONS", "CREATE"), validateRequest({ body: positionSchema }), createPosition);
-router.patch("/positions/:id", requirePermission("POSITIONS", "UPDATE"), validateRequest({ params: idParam, body: positionSchema.partial() }), updatePosition);
-router.delete("/positions/:id", requirePermission("POSITIONS", "DELETE"), validateRequest({ params: idParam }), deactivatePosition);
-router.patch("/positions/:id/deactivate", requirePermission("POSITIONS", "DELETE"), validateRequest({ params: idParam }), deactivatePosition);
+router.post("/positions", requirePermission("POSITIONS", "CREATE"), invalidateCache(["positions", "dashboard"]), validateRequest({ body: positionSchema }), createPosition);
+router.patch("/positions/:id", requirePermission("POSITIONS", "UPDATE"), invalidateCache(["positions", "dashboard"]), validateRequest({ params: idParam, body: positionSchema.partial() }), updatePosition);
+router.delete("/positions/:id", requirePermission("POSITIONS", "DELETE"), invalidateCache(["positions", "dashboard"]), validateRequest({ params: idParam }), deactivatePosition);
+router.patch("/positions/:id/deactivate", requirePermission("POSITIONS", "DELETE"), invalidateCache(["positions", "dashboard"]), validateRequest({ params: idParam }), deactivatePosition);
 
-router.get("/employee-types", requirePermission("EMPLOYEE_TYPES", "READ"), listEmployeeTypes);
+router.get("/employee-types", requirePermission("EMPLOYEE_TYPES", "READ"), cacheResponse(120, "employee-types"), listEmployeeTypes);
 router.get("/employee-types/:id", requirePermission("EMPLOYEE_TYPES", "READ"), validateRequest({ params: idParam }), getEmployeeType);
-router.post("/employee-types", requirePermission("EMPLOYEE_TYPES", "CREATE"), validateRequest({ body: employeeTypeSchema }), createEmployeeType);
-router.patch("/employee-types/:id", requirePermission("EMPLOYEE_TYPES", "UPDATE"), validateRequest({ params: idParam, body: employeeTypeSchema.partial() }), updateEmployeeType);
-router.delete("/employee-types/:id", requirePermission("EMPLOYEE_TYPES", "DELETE"), validateRequest({ params: idParam }), (req, res, next) => {
+router.post("/employee-types", requirePermission("EMPLOYEE_TYPES", "CREATE"), invalidateCache(["employee-types", "dashboard"]), validateRequest({ body: employeeTypeSchema }), createEmployeeType);
+router.patch("/employee-types/:id", requirePermission("EMPLOYEE_TYPES", "UPDATE"), invalidateCache(["employee-types", "dashboard"]), validateRequest({ params: idParam, body: employeeTypeSchema.partial() }), updateEmployeeType);
+router.delete("/employee-types/:id", requirePermission("EMPLOYEE_TYPES", "DELETE"), invalidateCache(["employee-types", "dashboard"]), validateRequest({ params: idParam }), (req, res, next) => {
   req.body = { is_active: false };
   return setEmployeeTypeStatus(req, res, next);
 });
-router.patch("/employee-types/:id/status", requirePermission("EMPLOYEE_TYPES", "DELETE"), validateRequest({ params: idParam, body: employeeTypeSchema.pick({ is_active: true }) }), setEmployeeTypeStatus);
+router.patch("/employee-types/:id/status", requirePermission("EMPLOYEE_TYPES", "DELETE"), invalidateCache(["employee-types", "dashboard"]), validateRequest({ params: idParam, body: employeeTypeSchema.pick({ is_active: true }) }), setEmployeeTypeStatus);
 
 router.get(
   "/employees",
@@ -81,14 +83,16 @@ router.get(
     next();
   },
   validateRequest({ query: employeeQuerySchema }),
+  cacheResponse(30, "employees"),
   listEmployees
 );
 router.get("/employees/me", requirePermission("EMPLOYEES", "READ", { ownResolver: () => true }), myEmployee);
 router.get("/employees/:id", requirePermission("EMPLOYEES", "READ", { ownResolver: (req) => Number(req.params.id) === Number(req.auth.employee_id) }), validateRequest({ params: idParam }), getEmployee);
-router.post("/employees", requirePermission("EMPLOYEES", "CREATE"), validateRequest({ body: employeeSchema }), createEmployee);
+router.post("/employees", requirePermission("EMPLOYEES", "CREATE"), invalidateCache(["employees", "dashboard"]), validateRequest({ body: employeeSchema }), createEmployee);
 router.patch(
   "/employees/:id",
   requirePermission("EMPLOYEES", "UPDATE"),
+  invalidateCache(["employees", "dashboard"]),
   (req, res, next) => {
     if (req.auth?.role_name === "Employee") {
       throw new AppError(403, "Employees are not allowed to update employee details", "FORBIDDEN");
@@ -101,6 +105,7 @@ router.patch(
 router.patch(
   "/employees/:id/status",
   requirePermission("EMPLOYEES", "UPDATE_STATUS"),
+  invalidateCache(["employees", "dashboard"]),
   (req, res, next) => {
     if (req.auth?.role_name === "Employee") {
       throw new AppError(403, "Employees are not allowed to change employment status", "FORBIDDEN");
@@ -110,6 +115,6 @@ router.patch(
   validateRequest({ params: idParam, body: employeeStatusSchema }),
   changeEmployeeStatus
 );
-router.delete("/employees/:id", requirePermission("EMPLOYEES", "DELETE"), deleteEmployee);
+router.delete("/employees/:id", requirePermission("EMPLOYEES", "DELETE"), invalidateCache(["employees", "dashboard"]), deleteEmployee);
 
 module.exports = router;

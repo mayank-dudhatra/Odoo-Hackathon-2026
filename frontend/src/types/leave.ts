@@ -46,7 +46,8 @@ export interface LeaveBalance {
 }
 
 export interface LeaveRequest {
-  request_id: number;
+  leave_request_id: number;
+  request_id?: number;
   company_id: number;
   employee_id: number;
   employee_code?: string;

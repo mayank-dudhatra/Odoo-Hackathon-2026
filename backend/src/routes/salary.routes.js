@@ -33,16 +33,20 @@ const router = express.Router();
 
 router.use(authenticate);
 
+const { cacheResponse, invalidateCache } = require("../middleware/cache.middleware");
+
 // --- SALARY STRUCTURES ---
 router.post(
   "/salary-structures",
   requirePermission("SALARY_STRUCTURES", "CREATE"),
+  invalidateCache(["salary-structures", "dashboard"]),
   validateRequest({ body: createSalaryStructureSchema }),
   createSalaryStructure
 );
 router.get(
   "/salary-structures",
   requirePermission("SALARY_STRUCTURES", "READ"),
+  cacheResponse(120, "salary-structures"),
   listSalaryStructures
 );
 router.get(
@@ -54,6 +58,7 @@ router.get(
 router.patch(
   "/salary-structures/:id",
   requirePermission("SALARY_STRUCTURES", "UPDATE"),
+  invalidateCache(["salary-structures", "dashboard"]),
   validateRequest({
     params: z.object({ id: z.coerce.number().int().positive() }),
     body: updateSalaryStructureSchema,
@@ -63,6 +68,7 @@ router.patch(
 router.delete(
   "/salary-structures/:id",
   requirePermission("SALARY_STRUCTURES", "DELETE"),
+  invalidateCache(["salary-structures", "dashboard"]),
   validateRequest({ params: z.object({ id: z.coerce.number().int().positive() }) }),
   deactivateSalaryStructure
 );
@@ -71,12 +77,14 @@ router.delete(
 router.post(
   "/salary-rules",
   requirePermission("SALARY_RULES", "CREATE"),
+  invalidateCache(["salary-rules", "salary-structures", "dashboard"]),
   validateRequest({ body: createSalaryRuleSchema }),
   createSalaryRule
 );
 router.get(
   "/salary-rules",
   requirePermission("SALARY_RULES", "READ"),
+  cacheResponse(120, "salary-rules"),
   listSalaryRules
 );
 router.get(

@@ -1,45 +1,53 @@
 const { query, withTransaction } = require("../db");
+const { rbacCache } = require("../utils/cache");
 
 async function getRoleByName(roleName) {
+  const cacheKey = `role:name:${roleName}`;
+  const cached = rbacCache.get(cacheKey);
+  if (cached) return cached;
+
   const result = await query(
     `SELECT role_id, role_name FROM roles WHERE role_name = $1`,
     [roleName]
   );
-  return result.rows[0] || null;
+  const row = result.rows[0] || null;
+  if (row) rbacCache.set(cacheKey, row, 300);
+  return row;
 }
 
 async function getPermissionScope(roleId, moduleName, actionName) {
-  const result = await query(
-    `
-      SELECT rp.scope
-      FROM role_permissions rp
-      JOIN permissions p ON p.permission_id = rp.permission_id
-      WHERE rp.role_id = $1
-        AND p.module = $2
-        AND p.action = $3
-      LIMIT 1
-    `,
-    [roleId, moduleName, actionName]
-  );
-
-  return result.rows[0]?.scope || null;
+  const perms = await getRolePermissions(roleId);
+  const match = perms.find((p) => p.module === moduleName && p.action === actionName);
+  return match?.scope || null;
 }
 
 async function listRoles() {
+  const cached = rbacCache.get("roles:all");
+  if (cached) return cached;
+
   const result = await query(
     `SELECT role_id, role_name, description, created_at FROM roles ORDER BY role_name ASC`
   );
+  rbacCache.set("roles:all", result.rows, 120);
   return result.rows;
 }
 
 async function listPermissions() {
+  const cached = rbacCache.get("permissions:all");
+  if (cached) return cached;
+
   const result = await query(
     `SELECT permission_id, module, action FROM permissions ORDER BY module, action`
   );
+  rbacCache.set("permissions:all", result.rows, 300);
   return result.rows;
 }
 
 async function getRolePermissions(roleId) {
+  const cacheKey = `role_perms:${roleId}`;
+  const cached = rbacCache.get(cacheKey);
+  if (cached) return cached;
+
   const result = await query(
     `
       SELECT p.permission_id, p.module, p.action, rp.scope
@@ -51,6 +59,7 @@ async function getRolePermissions(roleId) {
     [roleId]
   );
 
+  rbacCache.set(cacheKey, result.rows, 300);
   return result.rows;
 }
 
@@ -68,6 +77,7 @@ async function replaceRolePermissions(roleId, permissions) {
       );
     }
 
+    rbacCache.del(`role_perms:${roleId}`);
     return getRolePermissions(roleId);
   });
 }

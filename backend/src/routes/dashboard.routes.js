@@ -14,11 +14,13 @@ const router = express.Router();
 
 router.use(authenticate);
 
-router.get("/overall", requirePermission("DASHBOARD", "READ"), getOverallDashboard);
-router.get("/payroll", requirePermission("DASHBOARD", "READ"), getPayrollDashboard);
-router.get("/hr", requirePermission("DASHBOARD", "READ"), getHrDashboard);
-router.get("/attendance", requirePermission("DASHBOARD", "READ"), getAttendanceDashboard);
-router.get("/time-off", requirePermission("DASHBOARD", "READ"), getTimeOffDashboard);
-router.get("/warnings", requirePermission("DASHBOARD", "READ"), getWarningsDashboard);
+const { cacheResponse } = require("../middleware/cache.middleware");
+
+router.get("/overall", requirePermission("DASHBOARD", "READ"), cacheResponse(20, "dashboard"), getOverallDashboard);
+router.get("/payroll", requirePermission("DASHBOARD", "READ"), cacheResponse(20, "dashboard"), getPayrollDashboard);
+router.get("/hr", requirePermission("DASHBOARD", "READ"), cacheResponse(20, "dashboard"), getHrDashboard);
+router.get("/attendance", requirePermission("DASHBOARD", "READ"), cacheResponse(20, "dashboard"), getAttendanceDashboard);
+router.get("/time-off", requirePermission("DASHBOARD", "READ"), cacheResponse(20, "dashboard"), getTimeOffDashboard);
+router.get("/warnings", requirePermission("DASHBOARD", "READ"), cacheResponse(20, "dashboard"), getWarningsDashboard);
 
 module.exports = router;

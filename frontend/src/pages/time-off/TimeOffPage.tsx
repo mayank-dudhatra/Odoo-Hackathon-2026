@@ -125,7 +125,7 @@ export const TimeOffPage: React.FC = () => {
       fetchRequests();
       fetchBalances();
     } catch (err: any) {
-      alert(err?.response?.data?.message || 'Failed to approve request');
+      alert(err?.message || err?.response?.data?.message || 'Failed to approve request');
     } finally {
       setActionLoadingId(null);
     }
@@ -140,7 +140,7 @@ export const TimeOffPage: React.FC = () => {
       fetchRequests();
       fetchBalances();
     } catch (err: any) {
-      alert(err?.response?.data?.message || 'Failed to refuse request');
+      alert(err?.message || err?.response?.data?.message || 'Failed to refuse request');
     } finally {
       setActionLoadingId(null);
     }
@@ -154,7 +154,7 @@ export const TimeOffPage: React.FC = () => {
       fetchRequests();
       fetchBalances();
     } catch (err: any) {
-      alert(err?.response?.data?.message || 'Failed to cancel request');
+      alert(err?.message || err?.response?.data?.message || 'Failed to cancel request');
     } finally {
       setActionLoadingId(null);
     }
@@ -391,12 +391,13 @@ export const TimeOffPage: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-[#E2E8F0]">
                     {requests.map((r) => {
+                      const reqId = (r.leave_request_id ?? r.request_id)!;
                       const isPending = r.status === 'PENDING';
                       const isOwn = Boolean(user?.employee_id && r.employee_id === user.employee_id);
-                      const isLoading = actionLoadingId === r.request_id;
+                      const isLoading = actionLoadingId === reqId;
 
                       return (
-                        <tr key={r.request_id} className="hover:bg-[#F8FAFC]/60 transition-colors">
+                        <tr key={reqId} className="hover:bg-[#F8FAFC]/60 transition-colors">
                           <td className="py-3.5 px-4 font-medium text-[#0F172A]">
                             <div>{r.employee_name || 'Employee'}</div>
                             <div className="text-xs text-[#64748B] font-normal">{r.employee_code}</div>
@@ -423,7 +424,7 @@ export const TimeOffPage: React.FC = () => {
                                 <button
                                   type="button"
                                   disabled={isLoading}
-                                  onClick={() => handleApprove(r.request_id)}
+                                  onClick={() => handleApprove(reqId)}
                                   className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors cursor-pointer"
                                   title="Approve Request"
                                 >
@@ -434,7 +435,7 @@ export const TimeOffPage: React.FC = () => {
                                 <button
                                   type="button"
                                   disabled={isLoading}
-                                  onClick={() => handleRefuse(r.request_id)}
+                                  onClick={() => handleRefuse(reqId)}
                                   className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
                                   title="Refuse Request"
                                 >
@@ -445,7 +446,7 @@ export const TimeOffPage: React.FC = () => {
                                 <button
                                   type="button"
                                   disabled={isLoading}
-                                  onClick={() => handleCancel(r.request_id)}
+                                  onClick={() => handleCancel(reqId)}
                                   className="p-1.5 text-slate-500 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
                                   title="Cancel Request"
                                 >

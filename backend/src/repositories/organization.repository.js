@@ -490,60 +490,61 @@ async function listEmployees(companyId, filters = {}, pagination, sort) {
   const offset = (pagination.page - 1) * pagination.limit;
   values.push(pagination.limit, offset);
 
-  const result = await query(
-    `
-      SELECT
-        e.employee_id,
-        e.company_id,
-        e.employee_code,
-        e.first_name,
-        e.last_name,
-        CONCAT(e.first_name, ' ', e.last_name) AS full_name,
-        e.email,
-        e.phone,
-        e.date_of_birth,
-        e.gender,
-        e.address,
-        e.hire_date,
-        e.department_id,
-        d.name AS department_name,
-        e.position_id,
-        p.title AS position_name,
-        e.employee_type_id,
-        et.name AS employee_type_name,
-        e.schedule_id,
-        ws.name AS schedule_name,
-        e.manager_id,
-        CONCAT(m.first_name, ' ', m.last_name) AS manager_name,
-        e.status,
-        e.created_by,
-        cu.username AS created_by_username,
-        e.created_at,
-        e.updated_at,
-        u.user_id,
-        u.role_id,
-        r.role_name,
-        u.status AS account_status
-      FROM employees e
-      LEFT JOIN departments d ON d.department_id = e.department_id
-      LEFT JOIN positions p ON p.position_id = e.position_id
-      LEFT JOIN employee_types et ON et.employee_type_id = e.employee_type_id
-      LEFT JOIN working_schedules ws ON ws.schedule_id = e.schedule_id
-      LEFT JOIN employees m ON m.employee_id = e.manager_id
-      LEFT JOIN users cu ON cu.user_id = e.created_by
-      LEFT JOIN users u ON u.employee_id = e.employee_id
-      LEFT JOIN roles r ON r.role_id = u.role_id
-      WHERE ${where.join(" AND ")}
-      ORDER BY ${sort.column} ${sort.order.toUpperCase()}
-      LIMIT $${index} OFFSET $${index + 1}
-    `,
-    values
-  );
-
-  const countResult = await query(
-    `SELECT COUNT(*)::int AS total FROM employees e WHERE ${where.join(" AND ")}`,
-    values.slice(0, values.length - 2)
-  );
+  const [result, countResult] = await Promise.all([
+    query(
+      `
+        SELECT
+          e.employee_id,
+          e.company_id,
+          e.employee_code,
+          e.first_name,
+          e.last_name,
+          CONCAT(e.first_name, ' ', e.last_name) AS full_name,
+          e.email,
+          e.phone,
+          e.date_of_birth,
+          e.gender,
+          e.address,
+          e.hire_date,
+          e.department_id,
+          d.name AS department_name,
+          e.position_id,
+          p.title AS position_name,
+          e.employee_type_id,
+          et.name AS employee_type_name,
+          e.schedule_id,
+          ws.name AS schedule_name,
+          e.manager_id,
+          CONCAT(m.first_name, ' ', m.last_name) AS manager_name,
+          e.status,
+          e.created_by,
+          cu.username AS created_by_username,
+          e.created_at,
+          e.updated_at,
+          u.user_id,
+          u.role_id,
+          r.role_name,
+          u.status AS account_status
+        FROM employees e
+        LEFT JOIN departments d ON d.department_id = e.department_id
+        LEFT JOIN positions p ON p.position_id = e.position_id
+        LEFT JOIN employee_types et ON et.employee_type_id = e.employee_type_id
+        LEFT JOIN working_schedules ws ON ws.schedule_id = e.schedule_id
+        LEFT JOIN employees m ON m.employee_id = e.manager_id
+        LEFT JOIN users cu ON cu.user_id = e.created_by
+        LEFT JOIN users u ON u.employee_id = e.employee_id
+        LEFT JOIN roles r ON r.role_id = u.role_id
+        WHERE ${where.join(" AND ")}
+        ORDER BY ${sort?.column || "created_at"} ${(sort?.order || "desc").toUpperCase()}
+        LIMIT $${index} OFFSET $${index + 1}
+      `,
+      values
+    ),
+    query(
+      `SELECT COUNT(*)::int AS total FROM employees e WHERE ${where.join(" AND ")}`,
+      values.slice(0, values.length - 2)
+    ),
+  ]);
 
   return {
     rows: result.rows,

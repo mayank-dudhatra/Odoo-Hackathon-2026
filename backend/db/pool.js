@@ -20,12 +20,20 @@ if (!connectionString) {
 }
 
 const sslMode = (process.env.PG_SSLMODE || "").toLowerCase();
+const sslConfig =
+  sslMode === "disable"
+    ? false
+    : { rejectUnauthorized: false };
+
 const pool = new Pool({
   connectionString,
-  ssl:
-    sslMode === "require" || process.env.NODE_ENV === "production"
-      ? { rejectUnauthorized: false }
-      : false,
+  ssl: sslConfig,
+  max: 20,
+  min: 4,
+  idleTimeoutMillis: 300000, // 5 minutes to prevent frequent TLS renegotiation
+  connectionTimeoutMillis: 15000,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 });
 
 module.exports = { pool };

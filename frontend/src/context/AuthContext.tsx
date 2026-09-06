@@ -50,7 +50,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return [];
   });
 
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    const savedUser = localStorage.getItem(USER_STORAGE_KEY);
+    const token = getStoredAccessToken();
+    return !(savedUser && token);
+  });
 
   const role = user?.role_name || null;
   const isAuthenticated = Boolean(user && getStoredAccessToken());

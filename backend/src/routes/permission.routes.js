@@ -7,6 +7,8 @@ const router = express.Router();
 
 router.use(authenticate);
 
-router.get("/", requirePermission("ROLES", "READ"), listPermissionsHandler);
+const { cacheResponse } = require("../middleware/cache.middleware");
+
+router.get("/", requirePermission("ROLES", "READ"), cacheResponse(300, "permissions"), listPermissionsHandler);
 
 module.exports = router;

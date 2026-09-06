@@ -8,7 +8,12 @@ const PORT = Number(process.env.PORT) || 5000;
 
 async function startServer() {
   try {
-    await pool.query("SELECT 1");
+    // Pre-warm connection pool so incoming requests do not wait on cold TLS handshakes
+    await Promise.all([
+      pool.query("SELECT 1"),
+      pool.query("SELECT 1"),
+      pool.query("SELECT 1"),
+    ]);
     await initSchema();
     const app = createApp();
 

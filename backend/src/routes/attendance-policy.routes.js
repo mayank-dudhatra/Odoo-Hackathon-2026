@@ -17,10 +17,12 @@ const router = express.Router();
 
 router.use(authenticate, loadCompanyContext);
 
-router.get("/", listAttendancePoliciesHandler);
+const { cacheResponse, invalidateCache } = require("../middleware/cache.middleware");
+
+router.get("/", cacheResponse(120, "attendance-policies"), listAttendancePoliciesHandler);
 router.get("/:id", validateRequest({ params: idParam }), getAttendancePolicyHandler);
-router.post("/", requirePermission("ATTENDANCE_POLICIES", "CREATE"), validateRequest({ body: attendancePolicySchema }), createAttendancePolicyHandler);
-router.patch("/:id", requirePermission("ATTENDANCE_POLICIES", "UPDATE"), validateRequest({ params: idParam, body: attendancePolicyUpdateSchema }), updateAttendancePolicyHandler);
-router.delete("/:id", requirePermission("ATTENDANCE_POLICIES", "DELETE"), validateRequest({ params: idParam }), deactivateAttendancePolicyHandler);
+router.post("/", requirePermission("ATTENDANCE_POLICIES", "CREATE"), invalidateCache(["attendance-policies", "dashboard"]), validateRequest({ body: attendancePolicySchema }), createAttendancePolicyHandler);
+router.patch("/:id", requirePermission("ATTENDANCE_POLICIES", "UPDATE"), invalidateCache(["attendance-policies", "dashboard"]), validateRequest({ params: idParam, body: attendancePolicyUpdateSchema }), updateAttendancePolicyHandler);
+router.delete("/:id", requirePermission("ATTENDANCE_POLICIES", "DELETE"), invalidateCache(["attendance-policies", "dashboard"]), validateRequest({ params: idParam }), deactivateAttendancePolicyHandler);
 
 module.exports = router;

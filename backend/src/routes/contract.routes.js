@@ -18,6 +18,8 @@ const router = express.Router();
 
 router.use(authenticate, loadCompanyContext);
 
+const { cacheResponse, invalidateCache } = require("../middleware/cache.middleware");
+
 router.get(
   "/",
   requirePermission("CONTRACTS", "READ"),
@@ -27,6 +29,7 @@ router.get(
     }
     next();
   },
+  cacheResponse(60, "contracts"),
   listContracts
 );
 router.get(
@@ -40,8 +43,8 @@ router.get(
   validateRequest({ params: idParam }),
   getContract
 );
-router.post("/", requirePermission("CONTRACTS", "CREATE"), validateRequest({ body: contractSchema }), createContractHandler);
-router.patch("/:id", requirePermission("CONTRACTS", "UPDATE"), validateRequest({ params: idParam, body: contractUpdateSchema }), updateContractHandler);
-router.delete("/:id", requirePermission("CONTRACTS", "DELETE"), validateRequest({ params: idParam }), terminateContractHandler);
+router.post("/", requirePermission("CONTRACTS", "CREATE"), invalidateCache(["contracts", "dashboard"]), validateRequest({ body: contractSchema }), createContractHandler);
+router.patch("/:id", requirePermission("CONTRACTS", "UPDATE"), invalidateCache(["contracts", "dashboard"]), validateRequest({ params: idParam, body: contractUpdateSchema }), updateContractHandler);
+router.delete("/:id", requirePermission("CONTRACTS", "DELETE"), invalidateCache(["contracts", "dashboard"]), validateRequest({ params: idParam }), terminateContractHandler);
 
 module.exports = router;

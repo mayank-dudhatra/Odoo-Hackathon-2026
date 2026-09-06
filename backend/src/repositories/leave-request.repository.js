@@ -28,7 +28,7 @@ async function createLeaveRequest(executor = defaultQuery, {
         status
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING *
+      RETURNING *, leave_request_id AS request_id
     `,
     [
       company_id,
@@ -50,6 +50,7 @@ async function findLeaveRequestById(executor = defaultQuery, companyId, requestI
     `
       SELECT
         lr.*,
+        lr.leave_request_id AS request_id,
         lt.name AS leave_type_name,
         lt.unit AS leave_type_unit,
         lt.requires_allocation,
@@ -77,6 +78,7 @@ async function findLeaveRequestForUpdate(executor, companyId, requestId) {
     `
       SELECT
         lr.*,
+        lr.leave_request_id AS request_id,
         lt.name AS leave_type_name,
         lt.unit AS leave_type_unit,
         lt.requires_allocation,
@@ -107,6 +109,7 @@ async function listLeaveRequests(executor = defaultQuery, companyId, {
   let sql = `
     SELECT
       lr.*,
+      lr.leave_request_id AS request_id,
       lt.name AS leave_type_name,
       lt.unit AS leave_type_unit,
       lt.requires_allocation,

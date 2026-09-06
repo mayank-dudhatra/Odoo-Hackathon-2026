@@ -68,16 +68,15 @@ export const EmployeeDetailPage: React.FC = () => {
   const fetchEmployee = useCallback(async () => {
     if (!id) return;
     try {
-      const data = await employeesApi.getEmployee(id);
-      setEmployee(data);
-
-      const [contractData, scheduleData, policiesData, employeeContracts, allSchedules] = await Promise.all([
+      const [data, contractData, scheduleData, policiesData, employeeContracts, allSchedules] = await Promise.all([
+        employeesApi.getEmployee(id),
         contractsApi.getEffectiveContract(Number(id)).catch(() => null),
         schedulesApi.getEffectiveSchedule(Number(id)).catch(() => null),
         attendanceApi.listPolicies().catch(() => []),
         contractsApi.listContracts({ employee_id: Number(id) }).catch(() => []),
         schedulesApi.listSchedules().catch(() => []),
       ]);
+      setEmployee(data);
 
       // Effective contract or fallback to active contract for THIS employee/company
       let finalContract = contractData;

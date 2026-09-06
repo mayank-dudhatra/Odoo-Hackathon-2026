@@ -15,11 +15,13 @@ const router = express.Router();
 
 router.use(authenticate);
 
-router.get("/", requirePermission("ROLES", "READ"), listRolesHandler);
-router.post("/", requirePermission("ROLES", "CREATE"), createRoleHandler);
+const { cacheResponse, invalidateCache } = require("../middleware/cache.middleware");
+
+router.get("/", requirePermission("ROLES", "READ"), cacheResponse(120, "roles"), listRolesHandler);
+router.post("/", requirePermission("ROLES", "CREATE"), invalidateCache(["roles"]), createRoleHandler);
 router.get("/:id", requirePermission("ROLES", "READ"), getRoleHandler);
-router.put("/:id", requirePermission("ROLES", "UPDATE"), updateRoleHandler);
-router.delete("/:id", requirePermission("ROLES", "DELETE"), deleteRoleHandler);
+router.put("/:id", requirePermission("ROLES", "UPDATE"), invalidateCache(["roles"]), updateRoleHandler);
+router.delete("/:id", requirePermission("ROLES", "DELETE"), invalidateCache(["roles"]), deleteRoleHandler);
 
 router.get(
   "/:id/permissions",
