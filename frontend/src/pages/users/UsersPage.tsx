@@ -208,13 +208,23 @@ export const UsersPage: React.FC = () => {
         </div>
 
         {canCreate && (
-          <Button
-            variant="primary"
-            onClick={handleOpenCreate}
-            leftIcon={<UserPlus className="w-4 h-4" />}
-          >
-            + Invite User
-          </Button>
+          <div className="flex items-center gap-2.5">
+            <Button
+              variant="outline"
+              onClick={handleOpenCreate}
+              leftIcon={<UserPlus className="w-4 h-4" />}
+            >
+              + Quick Invite User
+            </Button>
+
+            <Button
+              variant="primary"
+              onClick={() => navigate('/employees/new')}
+              leftIcon={<UserPlus className="w-4 h-4" />}
+            >
+              + Create Employee & Account
+            </Button>
+          </div>
         )}
       </div>
 
@@ -492,25 +502,49 @@ export const UsersPage: React.FC = () => {
                       {/* Actions */}
                       <td className="py-3.5 px-4 sm:px-6 text-right">
                         <div className="inline-flex items-center gap-1">
-                          {/* View Details */}
+                          {/* View Full Profile / Details */}
                           <button
                             type="button"
-                            onClick={() => navigate(`/users/${u.user_id}`)}
+                            onClick={() =>
+                              u.employee_id
+                                ? navigate(`/employees/${u.employee_id}`)
+                                : navigate(`/users/${u.user_id}`)
+                            }
                             className="p-1.5 rounded-md text-[#64748B] hover:text-[#2563EB] hover:bg-[#EFF6FF] transition-colors cursor-pointer"
-                            title="View Full User Details & Permissions"
+                            title={u.employee_id ? 'View Employee Profile & Details' : 'View User Account Details'}
                           >
                             <Eye className="w-4 h-4" />
                           </button>
 
-                          {/* Edit Role / Link */}
+                          {/* Full Edit Employee, Contract, Policy, Schedule & Role */}
                           {canUpdate && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                u.employee_id
+                                  ? navigate(`/employees/${u.employee_id}/edit`)
+                                  : handleOpenEdit(u)
+                              }
+                              className="p-1.5 rounded-md text-[#64748B] hover:text-[#2563EB] hover:bg-[#EFF6FF] transition-colors cursor-pointer"
+                              title={
+                                u.employee_id
+                                  ? 'Edit Full Employee Record, Contract, Schedule, Attendance Policy & Role'
+                                  : 'Quick Edit User Role / Employee Link'
+                              }
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          {/* Quick Role / Employee Link modal trigger */}
+                          {canUpdate && u.employee_id && (
                             <button
                               type="button"
                               onClick={() => handleOpenEdit(u)}
                               className="p-1.5 rounded-md text-[#64748B] hover:text-[#2563EB] hover:bg-[#EFF6FF] transition-colors cursor-pointer"
-                              title="Edit User Assignment"
+                              title="Quick Role Assignment / Link Modal"
                             >
-                              <Edit2 className="w-4 h-4" />
+                              <UserPlus className="w-4 h-4" />
                             </button>
                           )}
 

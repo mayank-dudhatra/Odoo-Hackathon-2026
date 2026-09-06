@@ -433,55 +433,90 @@ async function setCompanyEmployeeTypeActive(auth, employeeTypeId, isActive) {
 }
 
 async function createEmployeeRecord(auth, payload) {
-  await ensureDepartmentBelongsToCompany(auth.company_id, payload.department_id, "Employee department");
-  await ensurePositionBelongsToCompany(auth.company_id, payload.position_id);
-  await ensureEmployeeTypeBelongsToCompany(auth.company_id, payload.employee_type_id);
+  return withTransaction(async (client) => {
+    await ensureDepartmentBelongsToCompany(auth.company_id, payload.department_id, "Employee department");
+    await ensurePositionBelongsToCompany(auth.company_id, payload.position_id);
+    await ensureEmployeeTypeBelongsToCompany(auth.company_id, payload.employee_type_id);
 
-  if (payload.schedule_id) {
-    const scheduleResult = await query(
-      `SELECT schedule_id, is_active FROM working_schedules WHERE company_id = $1 AND schedule_id = $2 LIMIT 1`,
-      [auth.company_id, payload.schedule_id]
+    if (payload.schedule_id) {
+      const scheduleResult = await client.query(
+        `SELECT schedule_id, is_active FROM working_schedules WHERE company_id = $1 AND schedule_id = $2 LIMIT 1`,
+        [auth.company_id, payload.schedule_id]
+      );
+      if (!scheduleResult.rows[0]) {
+        throw new AppError(400, "Employee schedule must belong to the same company", "CROSS_COMPANY_REFERENCE");
+      }
+      if (!scheduleResult.rows[0].is_active) {
+        throw new AppError(400, "Cannot assign an inactive schedule to an employee", "INACTIVE_SCHEDULE");
+      }
+    }
+
+    if (payload.manager_id) {
+      await ensureEmployeeBelongsToCompany(auth.company_id, payload.manager_id, "Employee manager");
+    }
+
+    const employeeId = await createEmployee(
+      auth.company_id,
+      {
+        ...payload,
+        created_by: auth.user_id,
+      },
+      client
     );
-    if (!scheduleResult.rows[0]) {
-      throw new AppError(400, "Employee schedule must belong to the same company", "CROSS_COMPANY_REFERENCE");
+
+    const employee = await getEmployeeById(auth.company_id, employeeId, client);
+
+    // Resolve system role for user account creation
+    let targetRoleId = payload.role_id || null;
+    let targetRoleName = payload.role_name || "Employee";
+
+    const roleMapping = {
+      EMPLOYEE: "Employee",
+      Employee: "Employee",
+      HR_MANAGER: "HR Manager",
+      "HR Manager": "HR Manager",
+      HR_PAYROLL_USER: "Payroll User",
+      PAYROLL_USER: "Payroll User",
+      "Payroll User": "Payroll User",
+      "HR Payroll User": "Payroll User",
+      HR_PAYROLL_MANAGER: "Payroll Manager",
+      PAYROLL_MANAGER: "Payroll Manager",
+      "Payroll Manager": "Payroll Manager",
+      "HR Payroll Manager": "Payroll Manager",
+      ADMIN: "Admin",
+      Admin: "Admin",
+    };
+    if (roleMapping[targetRoleName]) {
+      targetRoleName = roleMapping[targetRoleName];
     }
-    if (!scheduleResult.rows[0].is_active) {
-      throw new AppError(400, "Cannot assign an inactive schedule to an employee", "INACTIVE_SCHEDULE");
+
+    if (!targetRoleId) {
+      const roleResult = await client.query(
+        `SELECT role_id, role_name FROM roles WHERE LOWER(role_name) = LOWER($1) LIMIT 1`,
+        [targetRoleName]
+      );
+      targetRoleId = roleResult.rows[0]?.role_id || 5;
+      if (roleResult.rows[0]?.role_name) {
+        targetRoleName = roleResult.rows[0].role_name;
+      }
     }
-  }
 
-  if (payload.manager_id) {
-    await ensureEmployeeBelongsToCompany(auth.company_id, payload.manager_id, "Employee manager");
-  }
-
-  const employeeId = await createEmployee(auth.company_id, {
-    ...payload,
-    created_by: auth.user_id,
-  });
-
-  const employee = await getEmployeeById(auth.company_id, employeeId);
-
-  // Automatically create user account & email credentials if employee has an email
-  if (employee && employee.email && payload.create_user_account !== false) {
-    try {
-      const existingUser = await query(
+    if (employee && employee.email && payload.create_user_account !== false) {
+      const existingUser = await client.query(
         `SELECT user_id, employee_id FROM users WHERE company_id = $1 AND (LOWER(email) = LOWER($2) OR employee_id = $3) LIMIT 1`,
         [auth.company_id, employee.email.trim(), employeeId]
       );
 
       if (existingUser.rows[0]) {
         const targetUserId = existingUser.rows[0].user_id;
-        if (!existingUser.rows[0].employee_id) {
-          await query(
-            `UPDATE users SET employee_id = $1, updated_at = NOW() WHERE user_id = $2 AND employee_id IS NULL`,
-            [employeeId, targetUserId]
-          );
-        }
-        await query(
+        await client.query(
+          `UPDATE users SET employee_id = $1, role_id = COALESCE($2, role_id), updated_at = NOW() WHERE user_id = $3`,
+          [employeeId, targetRoleId, targetUserId]
+        );
+        await client.query(
           `UPDATE employees SET user_id = $1, updated_at = NOW() WHERE employee_id = $2`,
           [targetUserId, employeeId]
         );
-        console.log(`[OrganizationService] Linked existing user (ID: ${targetUserId}) to employee ID ${employeeId}`);
       } else {
         const cleanFirst = (employee.first_name || "emp").toLowerCase().replace(/[^a-z0-9]/g, "");
         const cleanLast = (employee.last_name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -489,7 +524,7 @@ async function createEmployeeRecord(auth, payload) {
         if (baseUsername.length < 3) baseUsername = `${baseUsername}100`;
 
         let chosenUsername = baseUsername;
-        const userCheck = await query(
+        const userCheck = await client.query(
           `SELECT user_id FROM users WHERE company_id = $1 AND LOWER(username) = LOWER($2) LIMIT 1`,
           [auth.company_id, chosenUsername]
         );
@@ -501,12 +536,7 @@ async function createEmployeeRecord(auth, payload) {
         const tempPassword = generateTemporaryPassword(12);
         const passwordHash = await hashPassword(tempPassword);
 
-        const roleResult = await query(
-          `SELECT role_id FROM roles WHERE role_name = 'Employee' LIMIT 1`
-        );
-        const employeeRoleId = roleResult.rows[0]?.role_id || 5;
-
-        const userInsert = await query(
+        const userInsert = await client.query(
           `
             INSERT INTO users (
               company_id,
@@ -519,7 +549,7 @@ async function createEmployeeRecord(auth, payload) {
               must_change_password,
               email_verified_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE', TRUE, NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, NOW())
             RETURNING user_id, username, email
           `,
           [
@@ -528,24 +558,25 @@ async function createEmployeeRecord(auth, payload) {
             chosenUsername,
             employee.email.trim(),
             passwordHash,
-            employeeRoleId,
+            targetRoleId,
+            payload.account_status || "ACTIVE",
           ]
         );
 
         const newUser = userInsert.rows[0];
 
-        await query(
+        await client.query(
           `UPDATE employees SET user_id = $1, updated_at = NOW() WHERE employee_id = $2`,
           [newUser.user_id, employeeId]
         );
 
-        const companyResult = await query(
-          `SELECT name FROM companies WHERE company_id = $1 LIMIT 1`,
-          [auth.company_id]
-        );
-        const companyName = companyResult.rows[0]?.name || "PeoplePay360";
-
         try {
+          const companyResult = await client.query(
+            `SELECT name FROM companies WHERE company_id = $1 LIMIT 1`,
+            [auth.company_id]
+          );
+          const companyName = companyResult.rows[0]?.name || "PeoplePay360";
+
           await sendUserInvitationEmail({
             to: employee.email.trim(),
             userName: `${employee.first_name} ${employee.last_name || ''}`.trim(),
@@ -554,9 +585,8 @@ async function createEmployeeRecord(auth, payload) {
             loginUrl: `${env.frontendBaseUrl.replace(/\/$/, "")}/login`,
             companyName,
             employeeCode: employee.employee_code,
-            roleName: "Employee",
+            roleName: targetRoleName,
           });
-          console.log(`[OrganizationService] Sent credentials email to new employee ${employee.email} (Username: ${chosenUsername})`);
         } catch (emailErr) {
           console.error(`[OrganizationService] Failed to send credentials email to ${employee.email}:`, emailErr.message);
         }
@@ -571,37 +601,67 @@ async function createEmployeeRecord(auth, payload) {
             employee_id: employeeId,
             email: employee.email,
             username: chosenUsername,
-            role_name: "Employee",
+            role_name: targetRoleName,
           },
-        });
-
-        await createAuditLog({
-          companyId: auth.company_id,
-          userId: auth.user_id,
-          module: "AUTH",
-          action: "INVITATION_SENT",
-          recordId: newUser.user_id,
-          details: {
-            employee_id: employeeId,
-            email: employee.email,
-          },
-        });
+        }, client);
       }
-    } catch (err) {
-      console.error("[OrganizationService] Error auto-creating user account for employee:", err.message);
     }
-  }
 
-  await createAuditLog({
-    companyId: auth.company_id,
-    userId: auth.user_id,
-    module: "EMPLOYEES",
-    action: "CREATE",
-    recordId: employeeId,
-    details: employee,
+    // Link existing contract or create inline contract transactionally
+    if (payload.selected_contract_id) {
+      await client.query(
+        `UPDATE contracts SET employee_id = $1, status = 'ACTIVE', updated_at = NOW() WHERE company_id = $2 AND contract_id = $3`,
+        [employeeId, auth.company_id, payload.selected_contract_id]
+      );
+    } else if (payload.wage && payload.salary_structure_id) {
+      const startDate = payload.contract_start_date ? new Date(payload.contract_start_date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+      const endDate = payload.contract_end_date ? new Date(payload.contract_end_date).toISOString().slice(0, 10) : null;
+      await client.query(
+        `
+          INSERT INTO contracts (
+            company_id,
+            employee_id,
+            position_id,
+            department_id,
+            schedule_id,
+            salary_structure_id,
+            wage,
+            wage_type,
+            start_date,
+            end_date,
+            status,
+            created_by
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ACTIVE', $11)
+        `,
+        [
+          auth.company_id,
+          employeeId,
+          payload.position_id || null,
+          payload.department_id || null,
+          payload.schedule_id || null,
+          payload.salary_structure_id,
+          payload.wage,
+          payload.wage_type || "MONTHLY",
+          startDate,
+          endDate,
+          auth.user_id,
+        ]
+      );
+    }
+
+    await createAuditLog({
+      companyId: auth.company_id,
+      userId: auth.user_id,
+      module: "EMPLOYEES",
+      action: "CREATE",
+      recordId: employeeId,
+      details: { ...payload, role_name: targetRoleName },
+    }, client);
+
+    const finalEmp = await getEmployeeById(auth.company_id, employeeId, client);
+    return mapEmployee(finalEmp);
   });
-
-  return mapEmployee(employee);
 }
 
 async function listEmployeeRecords(auth, filters, pagination, sort) {
@@ -686,15 +746,74 @@ async function updateEmployeeRecord(auth, employeeId, payload) {
     await ensureNoCircularReporting(auth.company_id, employeeId, payload.manager_id);
   }
 
-  const updatedId = await updateEmployee(auth.company_id, employeeId, payload);
-  const employee = await getEmployeeById(auth.company_id, updatedId);
+  await updateEmployee(auth.company_id, employeeId, payload);
 
-  if (employee && employee.email) {
+  let newRoleId = payload.role_id || null;
+  if (!newRoleId && payload.role_name) {
+    const roleMapping = {
+      EMPLOYEE: "Employee",
+      Employee: "Employee",
+      HR_MANAGER: "HR Manager",
+      "HR Manager": "HR Manager",
+      HR_PAYROLL_USER: "Payroll User",
+      PAYROLL_USER: "Payroll User",
+      "Payroll User": "Payroll User",
+      "HR Payroll User": "Payroll User",
+      HR_PAYROLL_MANAGER: "Payroll Manager",
+      PAYROLL_MANAGER: "Payroll Manager",
+      "Payroll Manager": "Payroll Manager",
+      "HR Payroll Manager": "Payroll Manager",
+      ADMIN: "Admin",
+      Admin: "Admin",
+    };
+    const cleanRole = roleMapping[payload.role_name] || payload.role_name;
+    const rRes = await query(
+      `SELECT role_id FROM roles WHERE LOWER(role_name) = LOWER($1) LIMIT 1`,
+      [cleanRole]
+    );
+    newRoleId = rRes.rows[0]?.role_id || null;
+  }
+
+  const updates = [];
+  const vals = [];
+
+  if (newRoleId) {
+    updates.push(`role_id = $${vals.length + 1}::int`);
+    vals.push(newRoleId);
+  }
+  if (payload.account_status) {
+    updates.push(`status = $${vals.length + 1}`);
+    vals.push(payload.account_status);
+  }
+  if (payload.email) {
+    updates.push(`email = $${vals.length + 1}`);
+    vals.push(payload.email.trim());
+  }
+
+  if (updates.length > 0) {
+    const companyIdx = vals.length + 1;
+    const empIdx = vals.length + 2;
+    vals.push(auth.company_id, employeeId);
+    let whereClause = `WHERE company_id = $${companyIdx} AND (employee_id = $${empIdx}`;
+    if (payload.email || current.email) {
+      const emailIdx = vals.length + 1;
+      vals.push((payload.email || current.email).trim());
+      whereClause += ` OR LOWER(email) = LOWER($${emailIdx})`;
+    }
+    whereClause += `)`;
+
+    await query(
+      `UPDATE users SET ${updates.join(", ")}, updated_at = NOW() ${whereClause}`,
+      vals
+    );
+  } else if (payload.email || current.email) {
     await query(
       `UPDATE users SET employee_id = $1, updated_at = NOW() WHERE company_id = $2 AND LOWER(email) = LOWER($3) AND employee_id IS NULL`,
-      [employeeId, auth.company_id, employee.email.trim()]
+      [employeeId, auth.company_id, (payload.email || current.email).trim()]
     );
   }
+
+  const employee = await getEmployeeById(auth.company_id, employeeId);
 
   await createAuditLog({
     companyId: auth.company_id,

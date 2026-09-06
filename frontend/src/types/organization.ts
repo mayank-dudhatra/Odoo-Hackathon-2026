@@ -79,6 +79,10 @@ export interface Employee {
   created_by_username?: string | null;
   created_at: string;
   updated_at: string;
+  user_id?: number | null;
+  role_id?: number | null;
+  role_name?: string | null;
+  account_status?: string | null;
 }
 
 export interface CreateEmployeePayload {
@@ -97,6 +101,16 @@ export interface CreateEmployeePayload {
   schedule_id?: number | null;
   manager_id?: number | null;
   status?: EmployeeStatus;
+  create_user_account?: boolean;
+  role_name?: string | null;
+  role_id?: number | null;
+  account_status?: string | null;
+  salary_structure_id?: number | null;
+  wage?: number | string | null;
+  wage_type?: string | null;
+  contract_start_date?: string | null;
+  contract_end_date?: string | null;
+  selected_contract_id?: number | null;
 }
 
 export interface EmployeeQueryParams {

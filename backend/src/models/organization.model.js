@@ -86,6 +86,10 @@ function mapEmployee(row) {
     created_by_username: row.created_by_username || null,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    user_id: row.user_id || null,
+    role_id: row.role_id || null,
+    role_name: row.role_name || null,
+    account_status: row.account_status || null,
   };
 }
 

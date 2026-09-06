@@ -47,7 +47,18 @@ const employeeSchema = z.object({
   manager_id: z.coerce.number().int().positive().nullable().optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "TERMINATED"]).optional(),
   create_user_account: z.boolean().optional(),
+  role_name: z.string().max(50).nullable().optional(),
+  role_id: z.coerce.number().int().positive().nullable().optional(),
+  account_status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED"]).optional(),
+  salary_structure_id: z.coerce.number().int().positive().nullable().optional(),
+  wage: z.union([z.number(), z.string()]).nullable().optional(),
+  wage_type: z.string().max(20).nullable().optional(),
+  contract_start_date: z.coerce.date().nullable().optional(),
+  contract_end_date: z.coerce.date().nullable().optional(),
+  selected_contract_id: z.coerce.number().int().positive().nullable().optional(),
 });
+
+const employeeUpdateSchema = employeeSchema.partial();
 
 const employeeStatusSchema = z.object({
   status: z.enum(["ACTIVE", "INACTIVE", "TERMINATED"]),
@@ -73,6 +84,7 @@ module.exports = {
   positionSchema,
   employeeTypeSchema,
   employeeSchema,
+  employeeUpdateSchema,
   employeeStatusSchema,
   employeeQuerySchema,
 };

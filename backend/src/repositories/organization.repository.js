@@ -396,8 +396,9 @@ async function hardDeleteEmployeeType(companyId, employeeTypeId) {
   return result.rows[0] || null;
 }
 
-async function getEmployeeById(companyId, employeeId) {
-  const result = await query(
+async function getEmployeeById(companyId, employeeId, client = null) {
+  const executor = client || { query };
+  const result = await executor.query(
     `
       SELECT
         e.employee_id,
@@ -426,7 +427,11 @@ async function getEmployeeById(companyId, employeeId) {
         e.created_by,
         cu.username AS created_by_username,
         e.created_at,
-        e.updated_at
+        e.updated_at,
+        u.user_id,
+        u.role_id,
+        r.role_name,
+        u.status AS account_status
       FROM employees e
       LEFT JOIN departments d ON d.department_id = e.department_id
       LEFT JOIN positions p ON p.position_id = e.position_id
@@ -434,6 +439,8 @@ async function getEmployeeById(companyId, employeeId) {
       LEFT JOIN working_schedules ws ON ws.schedule_id = e.schedule_id
       LEFT JOIN employees m ON m.employee_id = e.manager_id
       LEFT JOIN users cu ON cu.user_id = e.created_by
+      LEFT JOIN users u ON u.employee_id = e.employee_id
+      LEFT JOIN roles r ON r.role_id = u.role_id
       WHERE e.company_id = $1 AND e.employee_id = $2
       LIMIT 1
     `,
@@ -512,7 +519,11 @@ async function listEmployees(companyId, filters = {}, pagination, sort) {
         e.created_by,
         cu.username AS created_by_username,
         e.created_at,
-        e.updated_at
+        e.updated_at,
+        u.user_id,
+        u.role_id,
+        r.role_name,
+        u.status AS account_status
       FROM employees e
       LEFT JOIN departments d ON d.department_id = e.department_id
       LEFT JOIN positions p ON p.position_id = e.position_id
@@ -520,6 +531,8 @@ async function listEmployees(companyId, filters = {}, pagination, sort) {
       LEFT JOIN working_schedules ws ON ws.schedule_id = e.schedule_id
       LEFT JOIN employees m ON m.employee_id = e.manager_id
       LEFT JOIN users cu ON cu.user_id = e.created_by
+      LEFT JOIN users u ON u.employee_id = e.employee_id
+      LEFT JOIN roles r ON r.role_id = u.role_id
       WHERE ${where.join(" AND ")}
       ORDER BY ${sort.column} ${sort.order.toUpperCase()}
       LIMIT $${index} OFFSET $${index + 1}
@@ -546,8 +559,9 @@ async function hardDeleteEmployee(companyId, employeeId) {
   return result.rows[0] || null;
 }
 
-async function createEmployee(companyId, payload) {
-  const result = await query(
+async function createEmployee(companyId, payload, client = null) {
+  const executor = client || { query };
+  const result = await executor.query(
     `
       INSERT INTO employees (
         company_id,
@@ -597,21 +611,25 @@ async function createEmployee(companyId, payload) {
   return result.rows[0].employee_id;
 }
 
-async function updateEmployee(companyId, employeeId, payload) {
+async function updateEmployee(companyId, employeeId, payload, client = null) {
+  const executor = client || { query };
   const fields = [];
   const values = [];
 
   for (const [key, value] of Object.entries(payload)) {
+    if (["role_name", "role_id", "account_status", "create_user_account", "salary_structure_id", "wage", "wage_type", "contract_start_date", "contract_end_date", "selected_contract_id"].includes(key)) {
+      continue;
+    }
     fields.push(`${key} = $${values.length + 1}`);
     values.push(value);
   }
 
   if (!fields.length) {
-    return getEmployeeById(companyId, employeeId);
+    return employeeId;
   }
 
   values.push(companyId, employeeId);
-  const result = await query(
+  const result = await executor.query(
     `
       UPDATE employees
       SET ${fields.join(", ")}, updated_at = NOW()
@@ -622,7 +640,7 @@ async function updateEmployee(companyId, employeeId, payload) {
     values
   );
 
-  return result.rows[0]?.employee_id || null;
+  return result.rows[0]?.employee_id || employeeId;
 }
 
 async function updateEmployeeStatus(companyId, employeeId, status) {

@@ -14,6 +14,8 @@ import {
   Plus,
   UserCheck,
   Mail,
+  KeyRound,
+  DollarSign,
 } from 'lucide-react';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -26,6 +28,7 @@ import { employeeTypesApi } from '../../api/employeeTypes.api';
 import { schedulesApi } from '../../api/schedules.api';
 import { contractsApi } from '../../api/contracts.api';
 import { attendanceApi } from '../../api/attendance.api';
+import { salaryApi } from '../../api/salary.api';
 import type {
   Department,
   Position,
@@ -37,16 +40,16 @@ import type {
 import type { WorkingSchedule } from '../../types/schedules';
 import type { Contract } from '../../types/contracts';
 import type { AttendancePolicy } from '../../types/attendance';
+import type { SalaryStructure } from '../../types/salary';
 import { useAuth } from '../../hooks/useAuth';
 
-const ONBOARDING_STEPS = [
+const ADMIN_WIZARD_STEPS = [
   { step: 1, title: 'Basic Info', icon: UserCheck },
-  { step: 2, title: 'Contact', icon: UserPlus },
-  { step: 3, title: 'Organization', icon: Building2 },
-  { step: 4, title: 'Policies', icon: Shield },
-  { step: 5, title: 'Schedule', icon: Clock },
-  { step: 6, title: 'Contract', icon: FileText },
-  { step: 7, title: 'Review & Create', icon: CheckCircle2 },
+  { step: 2, title: 'Employment', icon: Building2 },
+  { step: 3, title: 'Work Config', icon: Clock },
+  { step: 4, title: 'Contract & Salary', icon: DollarSign },
+  { step: 5, title: 'Account & Role', icon: KeyRound },
+  { step: 6, title: 'Review & Create', icon: CheckCircle2 },
 ];
 
 export const EmployeeFormPage: React.FC = () => {
@@ -54,7 +57,6 @@ export const EmployeeFormPage: React.FC = () => {
   const navigate = useNavigate();
   const { role, user } = useAuth();
   const isEditing = Boolean(id);
-  const isSelfEdit = false;
 
   useEffect(() => {
     if (role === 'Employee') {
@@ -62,7 +64,7 @@ export const EmployeeFormPage: React.FC = () => {
     }
   }, [role, user, navigate]);
 
-  // Onboarding step (for new employee creation)
+  // Wizard Step Control
   const [currentStep, setCurrentStep] = useState(1);
 
   // Reference Data
@@ -73,6 +75,7 @@ export const EmployeeFormPage: React.FC = () => {
   const [schedules, setSchedules] = useState<WorkingSchedule[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [policies, setPolicies] = useState<AttendancePolicy[]>([]);
+  const [salaryStructures, setSalaryStructures] = useState<SalaryStructure[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -80,38 +83,45 @@ export const EmployeeFormPage: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  // Form Fields - Step 1: Basic
-  const [employeeCode, setEmployeeCode] = useState('');
+  // STEP 1 — Basic Information
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [hireDate, setHireDate] = useState(new Date().toISOString().split('T')[0]);
-  const [status, setStatus] = useState<EmployeeStatus>('ACTIVE');
-
-  // Form Fields - Step 2: Contact
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [gender, setGender] = useState('');
+  const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
 
-  // Form Fields - Step 3: Organization
+  // STEP 2 — Employment Information
+  const [employeeCode, setEmployeeCode] = useState('');
+  const [hireDate, setHireDate] = useState(new Date().toISOString().split('T')[0]);
   const [departmentId, setDepartmentId] = useState('');
   const [positionId, setPositionId] = useState('');
   const [employeeTypeId, setEmployeeTypeId] = useState('');
   const [managerId, setManagerId] = useState('');
+  const [status, setStatus] = useState<EmployeeStatus>('ACTIVE');
 
-  // Form Fields - Step 4: Attendance & Policy
+  // STEP 3 — Work Configuration
+  const [scheduleId, setScheduleId] = useState('');
   const [selectedPolicyId, setSelectedPolicyId] = useState('');
   const [isCustomizingPolicy, setIsCustomizingPolicy] = useState(false);
   const [customPolicyName, setCustomPolicyName] = useState('');
   const [customGraceMinutes, setCustomGraceMinutes] = useState('15');
   const [isCreatingCustomPolicy, setIsCreatingCustomPolicy] = useState(false);
 
-  // Form Fields - Step 5: Working Schedule
-  const [scheduleId, setScheduleId] = useState('');
-
-  // Form Fields - Step 6: Contract
+  // STEP 4 — Contract & Salary
+  const [contractOption, setContractOption] = useState<'NONE' | 'EXISTING' | 'INLINE'>('INLINE');
   const [selectedContractId, setSelectedContractId] = useState('');
+  const [salaryStructureId, setSalaryStructureId] = useState('');
+  const [wageAmount, setWageAmount] = useState('15000');
+  const [wageType, setWageType] = useState('MONTHLY');
+  const [contractStartDate, setContractStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [contractEndDate, setContractEndDate] = useState('');
+
+  // STEP 5 — Account & Role
+  const [email, setEmail] = useState('');
+  const [assignedRole, setAssignedRole] = useState<'EMPLOYEE' | 'HR_MANAGER' | 'HR_PAYROLL_USER' | 'HR_PAYROLL_MANAGER'>('EMPLOYEE');
+  const [accountStatus, setAccountStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
+  const [createUserAccount, setCreateUserAccount] = useState(true);
 
   // Load Reference Data
   useEffect(() => {
@@ -124,8 +134,9 @@ export const EmployeeFormPage: React.FC = () => {
       schedulesApi.listSchedules().catch(() => []),
       contractsApi.listContracts().catch(() => []),
       attendanceApi.listPolicies().catch(() => []),
+      salaryApi.listStructures().catch(() => []),
     ])
-      .then(([deps, pos, types, empRes, scheds, ctrs, pols]) => {
+      .then(([deps, pos, types, empRes, scheds, ctrs, pols, structures]) => {
         setDepartments(deps);
         setPositions(pos);
         setEmployeeTypes(types);
@@ -133,6 +144,11 @@ export const EmployeeFormPage: React.FC = () => {
         setSchedules(scheds);
         setContracts(ctrs);
         setPolicies(pols);
+        setSalaryStructures(structures);
+
+        if (structures.length > 0 && !salaryStructureId) {
+          setSalaryStructureId(String(structures[0].salary_structure_id));
+        }
       })
       .finally(() => {
         if (!isEditing) setIsLoading(false);
@@ -144,7 +160,6 @@ export const EmployeeFormPage: React.FC = () => {
     if (!id) return;
     try {
       const data = await employeesApi.getEmployee(id);
-      setEmployeeCode(data.employee_code || '');
       setFirstName(data.first_name || '');
       setLastName(data.last_name || '');
       setEmail(data.email || '');
@@ -152,13 +167,27 @@ export const EmployeeFormPage: React.FC = () => {
       setDateOfBirth(data.date_of_birth ? data.date_of_birth.split('T')[0] : '');
       setGender(data.gender || '');
       setAddress(data.address || '');
+
+      setEmployeeCode(data.employee_code || '');
       setHireDate(data.hire_date ? data.hire_date.split('T')[0] : '');
       setDepartmentId(data.department_id ? String(data.department_id) : '');
       setPositionId(data.position_id ? String(data.position_id) : '');
       setEmployeeTypeId(data.employee_type_id ? String(data.employee_type_id) : '');
       setManagerId(data.manager_id ? String(data.manager_id) : '');
-      setScheduleId(data.schedule_id ? String(data.schedule_id) : '');
       setStatus(data.status || 'ACTIVE');
+      setScheduleId(data.schedule_id ? String(data.schedule_id) : '');
+
+      if (data.role_name) {
+        const roleUpper = data.role_name.toUpperCase().replace(/\s+/g, '_');
+        if (roleUpper.includes('PAYROLL_MANAGER')) setAssignedRole('HR_PAYROLL_MANAGER');
+        else if (roleUpper.includes('PAYROLL_USER')) setAssignedRole('HR_PAYROLL_USER');
+        else if (roleUpper.includes('HR_MANAGER')) setAssignedRole('HR_MANAGER');
+        else setAssignedRole('EMPLOYEE');
+      }
+
+      if (data.account_status) {
+        setAccountStatus(data.account_status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE');
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to load employee details';
       setInitialError(msg);
@@ -173,31 +202,26 @@ export const EmployeeFormPage: React.FC = () => {
     }
   }, [isEditing, loadEmployee]);
 
-  // Validation functions per step
+  // Step Validation
   const validateStep = (stepNumber: number) => {
     const errs: Record<string, string> = {};
 
     if (stepNumber === 1) {
-      if (!isSelfEdit) {
-        if (!employeeCode.trim()) {
-          errs.employeeCode = 'Employee code is required';
-        } else if (employeeCode.length < 2 || employeeCode.length > 20) {
-          errs.employeeCode = 'Code must be between 2 and 20 characters';
-        }
-        if (!hireDate) {
-          errs.hireDate = 'Hire date is required';
-        }
-      }
-      if (!firstName.trim()) {
-        errs.firstName = 'First name is required';
-      }
-      if (!lastName.trim()) {
-        errs.lastName = 'Last name is required';
-      }
+      if (!firstName.trim()) errs.firstName = 'First name is required';
+      if (!lastName.trim()) errs.lastName = 'Last name is required';
     }
 
     if (stepNumber === 2) {
-      if (email.trim()) {
+      if (!employeeCode.trim()) {
+        errs.employeeCode = 'Employee code is required';
+      } else if (employeeCode.length < 2 || employeeCode.length > 20) {
+        errs.employeeCode = 'Code must be between 2 and 20 characters';
+      }
+      if (!hireDate) errs.hireDate = 'Joining / Hire date is required';
+    }
+
+    if (stepNumber === 5) {
+      if (createUserAccount && email.trim()) {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email.trim())) {
           errs.email = 'Invalid email address format';
@@ -211,7 +235,7 @@ export const EmployeeFormPage: React.FC = () => {
 
   const handleNextStep = () => {
     if (validateStep(currentStep)) {
-      setCurrentStep((prev) => Math.min(prev + 1, 7));
+      setCurrentStep((prev) => Math.min(prev + 1, 6));
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
@@ -221,7 +245,7 @@ export const EmployeeFormPage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Custom Attendance Policy Creation helper
+  // Custom Policy Handler
   const handleCreateCustomPolicy = async () => {
     if (!customPolicyName.trim()) {
       setFormError('Please enter a policy name for the custom policy');
@@ -253,64 +277,47 @@ export const EmployeeFormPage: React.FC = () => {
     }
   };
 
-  // Final Form Submission
+  // Final Submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateStep(1) || !validateStep(2)) return;
+    if (!validateStep(1) || !validateStep(2) || !validateStep(5)) return;
 
     setIsSubmitting(true);
     setFormError(null);
 
-    const payload: Partial<CreateEmployeePayload> = isSelfEdit
-      ? {
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          email: email.trim() || null,
-          phone: phone.trim() || null,
-          date_of_birth: dateOfBirth || null,
-          gender: gender.trim() || null,
-          address: address.trim() || null,
-        }
-      : {
-          employee_code: employeeCode.trim(),
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          email: email.trim() || null,
-          phone: phone.trim() || null,
-          date_of_birth: dateOfBirth || null,
-          gender: gender.trim() || null,
-          address: address.trim() || null,
-          hire_date: hireDate,
-          department_id: departmentId ? Number(departmentId) : null,
-          position_id: positionId ? Number(positionId) : null,
-          employee_type_id: employeeTypeId ? Number(employeeTypeId) : null,
-          schedule_id: scheduleId ? Number(scheduleId) : null,
-          manager_id: managerId ? Number(managerId) : null,
-          status,
-        };
+    const payload: CreateEmployeePayload = {
+      employee_code: employeeCode.trim(),
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
+      email: email.trim() || null,
+      phone: phone.trim() || null,
+      date_of_birth: dateOfBirth || null,
+      gender: gender.trim() || null,
+      address: address.trim() || null,
+      hire_date: hireDate,
+      department_id: departmentId ? Number(departmentId) : null,
+      position_id: positionId ? Number(positionId) : null,
+      employee_type_id: employeeTypeId ? Number(employeeTypeId) : null,
+      schedule_id: scheduleId ? Number(scheduleId) : null,
+      manager_id: managerId ? Number(managerId) : null,
+      status,
+      create_user_account: createUserAccount,
+      role_name: assignedRole,
+      account_status: accountStatus,
+      selected_contract_id: contractOption === 'EXISTING' && selectedContractId ? Number(selectedContractId) : null,
+      salary_structure_id: contractOption === 'INLINE' && salaryStructureId ? Number(salaryStructureId) : null,
+      wage: contractOption === 'INLINE' && wageAmount ? Number(wageAmount) : null,
+      wage_type: contractOption === 'INLINE' ? wageType : 'MONTHLY',
+      contract_start_date: contractOption === 'INLINE' ? contractStartDate : null,
+      contract_end_date: contractOption === 'INLINE' && contractEndDate ? contractEndDate : null,
+    };
 
     try {
       if (isEditing && id) {
         await employeesApi.updateEmployee(id, payload);
         navigate(`/employees/${id}`);
       } else {
-        const created = await employeesApi.createEmployee(payload as CreateEmployeePayload);
-
-        // If a contract was selected during onboarding, link the created employee
-        if (selectedContractId) {
-          try {
-            const todayStr = new Date().toISOString().split('T')[0];
-            const effectiveStartDate = hireDate && hireDate <= todayStr ? hireDate : todayStr;
-            await contractsApi.updateContract(selectedContractId, {
-              employee_id: created.employee_id,
-              status: 'ACTIVE',
-              start_date: effectiveStartDate,
-            });
-          } catch (err) {
-            console.error('Failed to link contract during employee creation:', err);
-          }
-        }
-
+        const created = await employeesApi.createEmployee(payload);
         navigate(`/employees/${created.employee_id}`);
       }
     } catch (err: unknown) {
@@ -321,7 +328,7 @@ export const EmployeeFormPage: React.FC = () => {
     }
   };
 
-  // Filter managers by selected department if department is selected
+  // Dropdown Options
   const departmentManagers = potentialManagers.filter((m) => {
     if (isEditing && String(m.employee_id) === String(id)) return false;
     if (!departmentId) return true;
@@ -348,7 +355,6 @@ export const EmployeeFormPage: React.FC = () => {
     })),
   ];
 
-  // Show all positions, tagging department name if assigned
   const positionOptions = [
     { value: '', label: 'None / Select Position' },
     ...positions.map((p) => ({
@@ -374,7 +380,7 @@ export const EmployeeFormPage: React.FC = () => {
   ];
 
   const contractOptions = [
-    { value: '', label: 'Assign Contract Later' },
+    { value: '', label: 'Select Draft Contract Template' },
     ...contracts.map((c) => ({
       value: String(c.contract_id),
       label: `${c.salary_structure_name || 'Contract'} - ₹${c.wage.toLocaleString()} / ${c.wage_type} (${c.status})`,
@@ -389,15 +395,23 @@ export const EmployeeFormPage: React.FC = () => {
     })),
   ];
 
-  // Helper lookup objects for Review step
-  const selectedDeptName = departments.find((d) => String(d.department_id) === departmentId)?.name || 'Not assigned';
-  const selectedPosName = positions.find((p) => String(p.position_id) === positionId)?.title || 'Not assigned';
-  const selectedTypeName = employeeTypes.find((t) => String(t.employee_type_id) === employeeTypeId)?.name || 'Not assigned';
+  const salaryStructureOptions = [
+    { value: '', label: 'Select Salary Structure' },
+    ...salaryStructures.map((ss) => ({
+      value: String(ss.salary_structure_id),
+      label: `${ss.name} (${ss.rules_count || 0} Rules)`,
+    })),
+  ];
+
+  // Helper Labels for Review
+  const selectedDeptName = departments.find((d) => String(d.department_id) === departmentId)?.name || 'Unassigned';
+  const selectedPosName = positions.find((p) => String(p.position_id) === positionId)?.title || 'Unassigned';
+  const selectedTypeName = employeeTypes.find((t) => String(t.employee_type_id) === employeeTypeId)?.name || 'Regular';
   const selectedManagerObj = potentialManagers.find((m) => String(m.employee_id) === managerId);
   const selectedManagerName = selectedManagerObj ? `${selectedManagerObj.full_name || `${selectedManagerObj.first_name} ${selectedManagerObj.last_name}`}` : 'None';
   const selectedSchedObj = schedules.find((s) => String(s.schedule_id) === scheduleId);
   const selectedPolicyObj = policies.find((p) => String(p.policy_id) === selectedPolicyId);
-  const selectedContractObj = contracts.find((c) => String(c.contract_id) === selectedContractId);
+  const selectedStructureObj = salaryStructures.find((ss) => String(ss.salary_structure_id) === salaryStructureId);
 
   if (isLoading) {
     return (
@@ -425,7 +439,7 @@ export const EmployeeFormPage: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-4xl pb-12">
-      {/* Page Header */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <Button
@@ -437,45 +451,34 @@ export const EmployeeFormPage: React.FC = () => {
             {isEditing ? 'Back to Profile' : 'Back to Directory'}
           </Button>
           <h1 className="text-2xl font-bold text-[#0F172A] tracking-tight">
-            {isEditing ? 'Edit Employee Profile' : 'New Employee Onboarding'}
+            {isEditing ? 'Edit Employee & Account Details' : 'Admin Unified Employee Creation Wizard'}
           </h1>
           <p className="text-sm text-[#64748B] mt-0.5">
             {isEditing
-              ? isSelfEdit
-                ? 'Update your personal profile details. Employment fields are managed by HR/Admin.'
-                : 'Update employee contact details, organizational alignment, and job details.'
-              : 'Complete the step-by-step form to onboard a new employee.'}
+              ? 'Update complete employee information, employment details, work configuration, and system role.'
+              : 'Complete the unified workflow to create employee record, user account, role permissions, and contract.'}
           </p>
         </div>
       </div>
-
-      {isSelfEdit && (
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3 text-blue-800 text-sm">
-          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-blue-600" />
-          <div>
-            <p className="font-semibold">Self-Service Profile Edit</p>
-            <p>You may edit your personal and contact details. Department, position, status, and employment details are locked and managed by HR/Admin.</p>
-          </div>
-        </div>
-      )}
 
       {formError && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 text-red-700 text-sm">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold">Unable to process request</p>
+            <p className="font-semibold">Unable to process employee creation</p>
             <p>{formError}</p>
           </div>
         </div>
       )}
 
-      {/* Multi-step Onboarding Progress Bar (When Creating New Employee) */}
+      {/* Multi-step Wizard Progress Bar (For New Employee Creation) */}
       {!isEditing && (
         <div className="bg-white rounded-xl border border-[#E2E8F0] p-4 shadow-2xs">
           <div className="flex items-center justify-between overflow-x-auto gap-2 pb-1 scrollbar-none">
-            {ONBOARDING_STEPS.map((s) => {
+            {ADMIN_WIZARD_STEPS.map((s) => {
               const isCurrent = currentStep === s.step;
               const isCompleted = currentStep > s.step;
+              const StepIcon = s.icon;
 
               return (
                 <button
@@ -503,7 +506,7 @@ export const EmployeeFormPage: React.FC = () => {
                         : 'bg-slate-200 text-slate-600'
                     }`}
                   >
-                    {isCompleted ? <CheckCircle2 className="w-3.5 h-3.5" /> : s.step}
+                    {isCompleted ? <CheckCircle2 className="w-3.5 h-3.5" /> : <StepIcon className="w-3 h-3" />}
                   </div>
                   <span>{s.title}</span>
                 </button>
@@ -514,31 +517,18 @@ export const EmployeeFormPage: React.FC = () => {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* STEP 1 / Single View: Basic Information */}
+        {/* STEP 1: Basic Information */}
         {(isEditing || currentStep === 1) && (
           <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-2xs space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0]">
               <h2 className="text-base font-bold text-[#0F172A] flex items-center gap-2">
                 <UserCheck className="w-5 h-5 text-[#2563EB]" />
-                <span>Basic Information</span>
+                <span>STEP 1 — Basic Personal Details</span>
               </h2>
-              {!isEditing && <span className="text-xs font-medium text-[#64748B]">Step 1 of 7</span>}
+              {!isEditing && <span className="text-xs font-medium text-[#64748B]">Step 1 of 6</span>}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Input
-                label="Employee Code"
-                placeholder="e.g. EMP-001"
-                value={employeeCode}
-                onChange={(e) => {
-                  setEmployeeCode(e.target.value.toUpperCase());
-                  if (fieldErrors.employeeCode) setFieldErrors({ ...fieldErrors, employeeCode: '' });
-                }}
-                error={fieldErrors.employeeCode}
-                required={!isSelfEdit}
-                disabled={isSelfEdit}
-              />
-
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
                 label="First Name"
                 placeholder="e.g. John"
@@ -565,66 +555,6 @@ export const EmployeeFormPage: React.FC = () => {
 
               <Input
                 type="date"
-                label="Hire Date"
-                value={hireDate}
-                onChange={(e) => {
-                  setHireDate(e.target.value);
-                  if (fieldErrors.hireDate) setFieldErrors({ ...fieldErrors, hireDate: '' });
-                }}
-                error={fieldErrors.hireDate}
-                required={!isSelfEdit}
-                disabled={isSelfEdit}
-              />
-
-              <Select
-                label="Account Status"
-                options={[
-                  { value: 'ACTIVE', label: 'ACTIVE' },
-                  { value: 'INACTIVE', label: 'INACTIVE' },
-                  { value: 'TERMINATED', label: 'TERMINATED' },
-                ]}
-                value={status}
-                onChange={(e) => setStatus(e.target.value as EmployeeStatus)}
-                disabled={isSelfEdit}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* STEP 2 / Single View: Contact Information */}
-        {(isEditing || currentStep === 2) && (
-          <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-2xs space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0]">
-              <h2 className="text-base font-bold text-[#0F172A] flex items-center gap-2">
-                <UserPlus className="w-5 h-5 text-[#2563EB]" />
-                <span>Personal & Contact Details</span>
-              </h2>
-              {!isEditing && <span className="text-xs font-medium text-[#64748B]">Step 2 of 7</span>}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                type="email"
-                label="Email Address"
-                placeholder="e.g. john.doe@company.com"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: '' });
-                }}
-                error={fieldErrors.email}
-              />
-
-              <Input
-                type="tel"
-                label="Phone Number"
-                placeholder="e.g. +91 9876543210"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-
-              <Input
-                type="date"
                 label="Date of Birth"
                 value={dateOfBirth}
                 onChange={(e) => setDateOfBirth(e.target.value)}
@@ -642,44 +572,73 @@ export const EmployeeFormPage: React.FC = () => {
                 onChange={(e) => setGender(e.target.value)}
               />
 
+              <Input
+                type="tel"
+                label="Phone Number"
+                placeholder="e.g. +91 9876543210"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+
               <div className="md:col-span-2">
                 <Input
                   label="Residential Address"
-                  placeholder="Full residential street, city, state, postal code"
+                  placeholder="Street address, city, state, zip code"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                 />
               </div>
-
-              {!isEditing && (
-                <div className="md:col-span-2 p-3.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg flex items-start gap-3 text-xs text-[#1D4ED8]">
-                  <Mail className="w-4 h-4 shrink-0 mt-0.5 text-[#2563EB]" />
-                  <div>
-                    <span className="font-semibold text-[#1E40AF]">Employee Portal Account & Login Credentials:</span>
-                    <p className="mt-0.5 text-[#2563EB]">
-                      {email
-                        ? `A portal user account will be automatically created, and secure login credentials will be emailed to ${email}.`
-                        : 'Provide an email address above to automatically create a portal login account and send login credentials.'}
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
 
-        {/* STEP 3 / Single View: Organization */}
-        {(isEditing || currentStep === 3) && (
+        {/* STEP 2: Employment Information */}
+        {(isEditing || currentStep === 2) && (
           <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-2xs space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0]">
               <h2 className="text-base font-bold text-[#0F172A] flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-[#2563EB]" />
-                <span>Organizational Alignment</span>
+                <span>STEP 2 — Employment & Organizational Alignment</span>
               </h2>
-              {!isEditing && <span className="text-xs font-medium text-[#64748B]">Step 3 of 7</span>}
+              {!isEditing && <span className="text-xs font-medium text-[#64748B]">Step 2 of 6</span>}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Input
+                label="Employee Code"
+                placeholder="e.g. EMP-001"
+                value={employeeCode}
+                onChange={(e) => {
+                  setEmployeeCode(e.target.value.toUpperCase());
+                  if (fieldErrors.employeeCode) setFieldErrors({ ...fieldErrors, employeeCode: '' });
+                }}
+                error={fieldErrors.employeeCode}
+                required
+              />
+
+              <Input
+                type="date"
+                label="Joining / Hire Date"
+                value={hireDate}
+                onChange={(e) => {
+                  setHireDate(e.target.value);
+                  if (fieldErrors.hireDate) setFieldErrors({ ...fieldErrors, hireDate: '' });
+                }}
+                error={fieldErrors.hireDate}
+                required
+              />
+
+              <Select
+                label="Employee Status"
+                options={[
+                  { value: 'ACTIVE', label: 'ACTIVE' },
+                  { value: 'INACTIVE', label: 'INACTIVE' },
+                  { value: 'TERMINATED', label: 'TERMINATED' },
+                ]}
+                value={status}
+                onChange={(e) => setStatus(e.target.value as EmployeeStatus)}
+              />
+
               <Select
                 label="Department"
                 options={departmentOptions}
@@ -688,7 +647,6 @@ export const EmployeeFormPage: React.FC = () => {
                   setDepartmentId(e.target.value);
                   setPositionId('');
                 }}
-                disabled={isSelfEdit}
               />
 
               <Select
@@ -696,7 +654,6 @@ export const EmployeeFormPage: React.FC = () => {
                 options={positionOptions}
                 value={positionId}
                 onChange={(e) => setPositionId(e.target.value)}
-                disabled={isSelfEdit}
               />
 
               <Select
@@ -704,46 +661,54 @@ export const EmployeeFormPage: React.FC = () => {
                 options={typeOptions}
                 value={employeeTypeId}
                 onChange={(e) => setEmployeeTypeId(e.target.value)}
-                disabled={isSelfEdit}
               />
 
-              <Select
-                label="Reporting Manager"
-                options={managerOptions}
-                value={managerId}
-                onChange={(e) => setManagerId(e.target.value)}
-                disabled={isSelfEdit}
-              />
+              <div className="md:col-span-3">
+                <Select
+                  label="Reporting Manager"
+                  options={managerOptions}
+                  value={managerId}
+                  onChange={(e) => setManagerId(e.target.value)}
+                />
+              </div>
             </div>
           </div>
         )}
 
-        {/* STEP 4: Policy & Attendance Assignment (New Employee Wizard Step 4) */}
-        {!isEditing && currentStep === 4 && (
+        {/* STEP 3: Work Configuration */}
+        {(isEditing || currentStep === 3) && (
           <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-2xs space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0]">
               <h2 className="text-base font-bold text-[#0F172A] flex items-center gap-2">
-                <Shield className="w-5 h-5 text-[#2563EB]" />
-                <span>Policy & Attendance Assignment</span>
+                <Clock className="w-5 h-5 text-[#2563EB]" />
+                <span>STEP 3 — Work Configuration (Schedule & Policies)</span>
               </h2>
-              <span className="text-xs font-medium text-[#64748B]">Step 4 of 7</span>
+              {!isEditing && <span className="text-xs font-medium text-[#64748B]">Step 3 of 6</span>}
             </div>
 
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Select
-                label="Select Attendance Policy"
+                label="Working Schedule / Shift"
+                options={scheduleOptions}
+                value={scheduleId}
+                onChange={(e) => setScheduleId(e.target.value)}
+                helperText="Assign work shift pattern for attendance & payroll calculations."
+              />
+
+              <Select
+                label="Attendance Policy"
                 options={policyOptions}
                 value={selectedPolicyId}
                 onChange={(e) => setSelectedPolicyId(e.target.value)}
-                helperText="Select an existing company attendance policy for late arrival and grace rules."
+                helperText="Assign grace period and late penalty rules."
               />
 
-              {/* Option to Clone/Customize Policy */}
-              <div className="p-4 bg-slate-50 border border-[#E2E8F0] rounded-xl space-y-3">
+              {/* Custom Policy creation prompt */}
+              <div className="md:col-span-2 p-4 bg-slate-50 border border-[#E2E8F0] rounded-xl space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-semibold text-[#0F172A]">Need a Custom Attendance Policy?</h3>
-                    <p className="text-xs text-[#64748B]">Clone an existing policy to customize rules without altering shared company policies.</p>
+                    <h3 className="text-sm font-semibold text-[#0F172A]">Custom Attendance Policy</h3>
+                    <p className="text-xs text-[#64748B]">Create a custom policy specifically tailored for this shift/role.</p>
                   </div>
                   <Button
                     type="button"
@@ -752,7 +717,7 @@ export const EmployeeFormPage: React.FC = () => {
                     leftIcon={<Plus className="w-3.5 h-3.5" />}
                     onClick={() => setIsCustomizingPolicy(!isCustomizingPolicy)}
                   >
-                    {isCustomizingPolicy ? 'Cancel Customization' : 'Customize Policy'}
+                    {isCustomizingPolicy ? 'Cancel Custom Policy' : 'Create Custom Policy'}
                   </Button>
                 </div>
 
@@ -761,7 +726,7 @@ export const EmployeeFormPage: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <Input
                         label="New Policy Name"
-                        placeholder="e.g. Sales Department Shift Policy"
+                        placeholder="e.g. High Priority Shift Policy"
                         value={customPolicyName}
                         onChange={(e) => setCustomPolicyName(e.target.value)}
                       />
@@ -787,133 +752,276 @@ export const EmployeeFormPage: React.FC = () => {
                   </div>
                 )}
               </div>
-
-              {/* Selected Policy Summary Preview */}
-              {selectedPolicyObj && (
-                <div className="p-4 bg-blue-50/50 border border-blue-200 rounded-xl text-xs space-y-1 text-blue-900">
-                  <p className="font-semibold text-sm text-blue-950">{selectedPolicyObj.name}</p>
-                  <p>Grace Period: {selectedPolicyObj.grace_period_minutes} minutes ({selectedPolicyObj.grace_occurrences_allowed} occurrences/month)</p>
-                  <p>Late Penalty Beyond Grace: {selectedPolicyObj.beyond_grace_penalty}</p>
-                </div>
-              )}
             </div>
           </div>
         )}
 
-        {/* STEP 5: Working Schedule (New Employee Wizard Step 5) */}
-        {!isEditing && currentStep === 5 && (
+        {/* STEP 4: Contract & Salary */}
+        {(isEditing || currentStep === 4) && (
           <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-2xs space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0]">
               <h2 className="text-base font-bold text-[#0F172A] flex items-center gap-2">
-                <Clock className="w-5 h-5 text-[#2563EB]" />
-                <span>Working Schedule Assignment</span>
+                <DollarSign className="w-5 h-5 text-[#2563EB]" />
+                <span>STEP 4 — Contract & Salary Configuration</span>
               </h2>
-              <span className="text-xs font-medium text-[#64748B]">Step 5 of 7</span>
+              {!isEditing && <span className="text-xs font-medium text-[#64748B]">Step 4 of 6</span>}
             </div>
 
             <div className="space-y-4">
-              <Select
-                label="Assigned Working Schedule / Shift"
-                options={scheduleOptions}
-                value={scheduleId}
-                onChange={(e) => setScheduleId(e.target.value)}
-                helperText="Select an existing company shift or working schedule for attendance calculations."
-              />
+              <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
+                <label className="flex items-center gap-2 font-medium cursor-pointer">
+                  <input
+                    type="radio"
+                    name="contractOption"
+                    checked={contractOption === 'INLINE'}
+                    onChange={() => setContractOption('INLINE')}
+                    className="text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>Create Active Contract Now</span>
+                </label>
 
-              {selectedSchedObj && (
-                <div className="p-4 bg-slate-50 border border-[#E2E8F0] rounded-xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-[#0F172A]">{selectedSchedObj.name}</span>
-                    <span className="text-xs font-semibold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full">
-                      {selectedSchedObj.hours_per_week} hrs/week
-                    </span>
-                  </div>
-                  <p className="text-xs text-[#64748B]">Timezone: {selectedSchedObj.timezone}</p>
-                  {selectedSchedObj.attendance_policy_name && (
-                    <p className="text-xs text-[#64748B]">Linked Policy: {selectedSchedObj.attendance_policy_name}</p>
-                  )}
+                <label className="flex items-center gap-2 font-medium cursor-pointer">
+                  <input
+                    type="radio"
+                    name="contractOption"
+                    checked={contractOption === 'EXISTING'}
+                    onChange={() => setContractOption('EXISTING')}
+                    className="text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>Link Existing Draft Contract</span>
+                </label>
+
+                <label className="flex items-center gap-2 font-medium cursor-pointer">
+                  <input
+                    type="radio"
+                    name="contractOption"
+                    checked={contractOption === 'NONE'}
+                    onChange={() => setContractOption('NONE')}
+                    className="text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>Skip Contract Setup</span>
+                </label>
+              </div>
+
+              {contractOption === 'EXISTING' && (
+                <Select
+                  label="Select Draft Contract Template"
+                  options={contractOptions}
+                  value={selectedContractId}
+                  onChange={(e) => setSelectedContractId(e.target.value)}
+                />
+              )}
+
+              {contractOption === 'INLINE' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-200">
+                  <Select
+                    label="Salary Structure"
+                    options={salaryStructureOptions}
+                    value={salaryStructureId}
+                    onChange={(e) => setSalaryStructureId(e.target.value)}
+                    required
+                  />
+
+                  <Input
+                    type="number"
+                    label="Wage / Base Amount (₹)"
+                    placeholder="e.g. 25000"
+                    value={wageAmount}
+                    onChange={(e) => setWageAmount(e.target.value)}
+                    required
+                  />
+
+                  <Select
+                    label="Wage Type"
+                    options={[
+                      { value: 'MONTHLY', label: 'Monthly Base Wage' },
+                      { value: 'HOURLY', label: 'Hourly Rate' },
+                      { value: 'WEEKLY', label: 'Weekly Pay' },
+                    ]}
+                    value={wageType}
+                    onChange={(e) => setWageType(e.target.value)}
+                  />
+
+                  <Input
+                    type="date"
+                    label="Contract Start Date"
+                    value={contractStartDate}
+                    onChange={(e) => setContractStartDate(e.target.value)}
+                  />
+
+                  <Input
+                    type="date"
+                    label="Contract End Date (Optional)"
+                    placeholder="Leave empty for indefinite contract"
+                    value={contractEndDate}
+                    onChange={(e) => setContractEndDate(e.target.value)}
+                  />
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* STEP 6: Contract Selection (New Employee Wizard Step 6) */}
+        {/* STEP 5: Account & Role Assignment */}
+        {(isEditing || currentStep === 5) && (
+          <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0]">
+              <h2 className="text-base font-bold text-[#0F172A] flex items-center gap-2">
+                <KeyRound className="w-5 h-5 text-[#2563EB]" />
+                <span>STEP 5 — Account Credentials & System Role</span>
+              </h2>
+              {!isEditing && <span className="text-xs font-medium text-[#64748B]">Step 5 of 6</span>}
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  type="email"
+                  label="Login Email Address"
+                  placeholder="e.g. employee@company.com"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: '' });
+                  }}
+                  error={fieldErrors.email}
+                />
+
+                <Select
+                  label="Account Status"
+                  options={[
+                    { value: 'ACTIVE', label: 'ACTIVE (Enabled Login)' },
+                    { value: 'INACTIVE', label: 'INACTIVE (Disabled Access)' },
+                  ]}
+                  value={accountStatus}
+                  onChange={(e) => setAccountStatus(e.target.value as 'ACTIVE' | 'INACTIVE')}
+                />
+              </div>
+
+              {/* System Role Selection Cards */}
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-[#0F172A] uppercase tracking-wider">
+                  Assign System Permission Role
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div
+                    onClick={() => setAssignedRole('EMPLOYEE')}
+                    className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                      assignedRole === 'EMPLOYEE'
+                        ? 'border-blue-600 bg-blue-50/60 ring-2 ring-blue-500/20'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between font-bold text-slate-900 text-sm">
+                      <span>Employee</span>
+                      {assignedRole === 'EMPLOYEE' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1">
+                      Own profile, attendance check-in/out, own leave requests, payslips. No admin access.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setAssignedRole('HR_MANAGER')}
+                    className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                      assignedRole === 'HR_MANAGER'
+                        ? 'border-blue-600 bg-blue-50/60 ring-2 ring-blue-500/20'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between font-bold text-slate-900 text-sm">
+                      <span>HR Manager</span>
+                      {assignedRole === 'HR_MANAGER' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1">
+                      Employee records, contract management, working schedules, leave approval. No payroll admin.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setAssignedRole('HR_PAYROLL_USER')}
+                    className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                      assignedRole === 'HR_PAYROLL_USER'
+                        ? 'border-blue-600 bg-blue-50/60 ring-2 ring-blue-500/20'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between font-bold text-slate-900 text-sm">
+                      <span>HR Payroll User</span>
+                      {assignedRole === 'HR_PAYROLL_USER' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1">
+                      HR permissions + payrun draft processing, payslip management. Read-only salary rules.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setAssignedRole('HR_PAYROLL_MANAGER')}
+                    className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                      assignedRole === 'HR_PAYROLL_MANAGER'
+                        ? 'border-blue-600 bg-blue-50/60 ring-2 ring-blue-500/20'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between font-bold text-slate-900 text-sm">
+                      <span>HR Payroll Manager</span>
+                      {assignedRole === 'HR_PAYROLL_MANAGER' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1">
+                      Full Salary Structure & Rule CRUD, full payrun validation, approval, and payslip control.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {!isEditing && (
+                <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between text-xs text-blue-900">
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-blue-600 shrink-0" />
+                    <span>Auto-create user account & email login credentials upon submission</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={createUserAccount}
+                    onChange={(e) => setCreateUserAccount(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* STEP 6: Review & Finalize */}
         {!isEditing && currentStep === 6 && (
-          <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-2xs space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0]">
-              <h2 className="text-base font-bold text-[#0F172A] flex items-center gap-2">
-                <FileText className="w-5 h-5 text-[#2563EB]" />
-                <span>Employment Contract</span>
-              </h2>
-              <span className="text-xs font-medium text-[#64748B]">Step 6 of 7</span>
-            </div>
-
-            <div className="space-y-4">
-              <Select
-                label="Assign Existing Draft Contract (Optional)"
-                options={contractOptions}
-                value={selectedContractId}
-                onChange={(e) => setSelectedContractId(e.target.value)}
-                helperText="Select an existing unassigned draft contract or proceed to create without linking immediately."
-              />
-
-              {selectedContractObj ? (
-                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1.5 text-xs text-emerald-900">
-                  <div className="flex items-center justify-between font-bold text-sm text-emerald-950">
-                    <span>Contract #{selectedContractObj.contract_id}</span>
-                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md">{selectedContractObj.status}</span>
-                  </div>
-                  <p>Structure: {selectedContractObj.salary_structure_name || 'Standard'}</p>
-                  <p>Wage: ₹{selectedContractObj.wage.toLocaleString()} ({selectedContractObj.wage_type})</p>
-                  <p>Effective Start Date: {selectedContractObj.start_date}</p>
-                </div>
-              ) : (
-                <p className="text-xs text-[#64748B] italic">No contract selected. You can create or assign contracts at any time under Contract Management.</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* STEP 7: Review & Finalize (New Employee Wizard Step 7) */}
-        {!isEditing && currentStep === 7 && (
           <div className="bg-white rounded-xl border border-[#E2E8F0] p-6 shadow-2xs space-y-6">
             <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0]">
               <h2 className="text-base font-bold text-[#0F172A] flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-[#2563EB]" />
-                <span>Review & Create Employee</span>
+                <span>STEP 6 — Review & Create Employee Profile</span>
               </h2>
-              <span className="text-xs font-medium text-[#64748B]">Step 7 of 7</span>
+              <span className="text-xs font-medium text-[#64748B]">Step 6 of 6</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div className="p-4 bg-slate-50 rounded-xl border border-[#E2E8F0] space-y-2">
                 <div className="flex justify-between items-center pb-1 border-b border-[#CBD5E1]">
-                  <span className="font-bold text-[#0F172A]">1. Basic Details</span>
+                  <span className="font-bold text-[#0F172A]">1. Basic Info</span>
                   <button type="button" onClick={() => setCurrentStep(1)} className="text-xs text-[#2563EB] hover:underline font-semibold">Edit</button>
                 </div>
-                <p><span className="text-[#64748B]">Code:</span> {employeeCode}</p>
                 <p><span className="text-[#64748B]">Name:</span> {firstName} {lastName}</p>
-                <p><span className="text-[#64748B]">Hire Date:</span> {hireDate}</p>
-                <p><span className="text-[#64748B]">Status:</span> {status}</p>
+                <p><span className="text-[#64748B]">DOB:</span> {dateOfBirth || 'N/A'}</p>
+                <p><span className="text-[#64748B]">Gender:</span> {gender || 'N/A'}</p>
+                <p><span className="text-[#64748B]">Phone:</span> {phone || 'N/A'}</p>
               </div>
 
               <div className="p-4 bg-slate-50 rounded-xl border border-[#E2E8F0] space-y-2">
                 <div className="flex justify-between items-center pb-1 border-b border-[#CBD5E1]">
-                  <span className="font-bold text-[#0F172A]">2. Contact Details</span>
+                  <span className="font-bold text-[#0F172A]">2. Employment</span>
                   <button type="button" onClick={() => setCurrentStep(2)} className="text-xs text-[#2563EB] hover:underline font-semibold">Edit</button>
                 </div>
-                <p><span className="text-[#64748B]">Email:</span> {email || 'N/A'}</p>
-                <p><span className="text-[#64748B]">Phone:</span> {phone || 'N/A'}</p>
-                <p><span className="text-[#64748B]">Gender:</span> {gender || 'N/A'}</p>
-                <p><span className="text-[#64748B]">Address:</span> {address || 'N/A'}</p>
-              </div>
-
-              <div className="p-4 bg-slate-50 rounded-xl border border-[#E2E8F0] space-y-2">
-                <div className="flex justify-between items-center pb-1 border-b border-[#CBD5E1]">
-                  <span className="font-bold text-[#0F172A]">3. Organization</span>
-                  <button type="button" onClick={() => setCurrentStep(3)} className="text-xs text-[#2563EB] hover:underline font-semibold">Edit</button>
-                </div>
+                <p><span className="text-[#64748B]">Code:</span> {employeeCode}</p>
+                <p><span className="text-[#64748B]">Joining Date:</span> {hireDate}</p>
                 <p><span className="text-[#64748B]">Department:</span> {selectedDeptName}</p>
                 <p><span className="text-[#64748B]">Position:</span> {selectedPosName}</p>
                 <p><span className="text-[#64748B]">Type:</span> {selectedTypeName}</p>
@@ -922,18 +1030,28 @@ export const EmployeeFormPage: React.FC = () => {
 
               <div className="p-4 bg-slate-50 rounded-xl border border-[#E2E8F0] space-y-2">
                 <div className="flex justify-between items-center pb-1 border-b border-[#CBD5E1]">
-                  <span className="font-bold text-[#0F172A]">4 & 5. Policies & Schedule</span>
+                  <span className="font-bold text-[#0F172A]">3. Work Config</span>
+                  <button type="button" onClick={() => setCurrentStep(3)} className="text-xs text-[#2563EB] hover:underline font-semibold">Edit</button>
+                </div>
+                <p><span className="text-[#64748B]">Schedule:</span> {selectedSchedObj ? `${selectedSchedObj.name} (${selectedSchedObj.hours_per_week} hrs/wk)` : 'Company Default'}</p>
+                <p><span className="text-[#64748B]">Attendance Policy:</span> {selectedPolicyObj ? selectedPolicyObj.name : 'Company Default'}</p>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-xl border border-[#E2E8F0] space-y-2">
+                <div className="flex justify-between items-center pb-1 border-b border-[#CBD5E1]">
+                  <span className="font-bold text-[#0F172A]">4 & 5. Contract, Account & Role</span>
                   <button type="button" onClick={() => setCurrentStep(4)} className="text-xs text-[#2563EB] hover:underline font-semibold">Edit</button>
                 </div>
-                <p><span className="text-[#64748B]">Attendance Policy:</span> {selectedPolicyObj ? selectedPolicyObj.name : 'Default'}</p>
-                <p><span className="text-[#64748B]">Working Schedule:</span> {selectedSchedObj ? `${selectedSchedObj.name} (${selectedSchedObj.hours_per_week} hrs/wk)` : 'Not assigned'}</p>
-                <p><span className="text-[#64748B]">Contract:</span> {selectedContractObj ? `${selectedContractObj.salary_structure_name || 'Contract'} - ₹${selectedContractObj.wage}` : 'None linked'}</p>
+                <p><span className="text-[#64748B]">Contract Setup:</span> {contractOption === 'INLINE' ? `₹${wageAmount} / ${wageType} (${selectedStructureObj?.name || 'Standard'})` : contractOption === 'EXISTING' ? 'Template Linked' : 'None'}</p>
+                <p><span className="text-[#64748B]">Login Email:</span> {email || 'N/A'}</p>
+                <p><span className="text-[#64748B]">Assigned Role:</span> <span className="font-bold text-blue-700">{assignedRole.replace(/_/g, ' ')}</span></p>
+                <p><span className="text-[#64748B]">Account Status:</span> {accountStatus}</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Step Navigation Controls */}
+        {/* Wizard Controls */}
         <div className="flex items-center justify-between pt-4 border-t border-[#E2E8F0]">
           <div>
             {!isEditing && currentStep > 1 && (
@@ -966,9 +1084,9 @@ export const EmployeeFormPage: React.FC = () => {
                 isLoading={isSubmitting}
                 leftIcon={<Save className="w-4 h-4" />}
               >
-                Save Profile Changes
+                Save Employee Profile
               </Button>
-            ) : currentStep < 7 ? (
+            ) : currentStep < 6 ? (
               <Button
                 type="button"
                 variant="primary"
@@ -984,7 +1102,7 @@ export const EmployeeFormPage: React.FC = () => {
                 isLoading={isSubmitting}
                 leftIcon={<UserPlus className="w-4 h-4" />}
               >
-                Create Employee Profile
+                Create Employee Record
               </Button>
             )}
           </div>

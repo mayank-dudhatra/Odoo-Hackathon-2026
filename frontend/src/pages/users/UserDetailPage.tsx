@@ -232,6 +232,16 @@ export const UserDetailPage: React.FC = () => {
               </Button>
             )}
 
+            {user.employee_id && (
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/employees/${user.employee_id}/edit`)}
+                leftIcon={<Briefcase className="w-4 h-4" />}
+              >
+                Edit Employee & Account Details
+              </Button>
+            )}
+
             <Button
               variant="outline"
               onClick={() => setIsRoleModalOpen(true)}

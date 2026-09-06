@@ -7,7 +7,7 @@ async function listContracts(companyId, filters = {}, client = null) {
   let index = 2;
 
   if (filters.employee_id) {
-    where.push(`c.employee_id = $${index}`);
+    where.push(`(c.employee_id = $${index} OR c.employee_id IS NULL)`);
     values.push(filters.employee_id);
     index += 1;
   }
@@ -228,12 +228,12 @@ async function getEffectiveContract(companyId, employeeId, targetDate, client = 
       SELECT
         c.contract_id,
         c.company_id,
-        c.employee_id,
+        COALESCE(c.employee_id, e.employee_id) AS employee_id,
         CONCAT(e.first_name, ' ', e.last_name) AS employee_name,
         e.employee_code,
-        c.position_id,
+        COALESCE(c.position_id, e.position_id) AS position_id,
         p.title AS position_name,
-        c.department_id,
+        COALESCE(c.department_id, e.department_id) AS department_id,
         d.name AS department_name,
         c.schedule_id,
         s.name AS schedule_name,
@@ -247,18 +247,30 @@ async function getEffectiveContract(companyId, employeeId, targetDate, client = 
         c.created_by,
         c.created_at,
         c.updated_at
-      FROM contracts c
-      JOIN employees e ON e.employee_id = c.employee_id
-      LEFT JOIN positions p ON p.position_id = c.position_id
-      LEFT JOIN departments d ON d.department_id = c.department_id
+      FROM employees e
+      JOIN contracts c ON c.company_id = e.company_id
+      LEFT JOIN positions p ON p.position_id = COALESCE(c.position_id, e.position_id)
+      LEFT JOIN departments d ON d.department_id = COALESCE(c.department_id, e.department_id)
       LEFT JOIN working_schedules s ON s.schedule_id = c.schedule_id
       LEFT JOIN salary_structures ss ON ss.salary_structure_id = c.salary_structure_id
-      WHERE c.company_id = $1
-        AND c.employee_id = $2
+      WHERE e.company_id = $1
+        AND e.employee_id = $2
+        AND (
+          c.employee_id = $2
+          OR c.employee_id IS NULL
+        )
         AND c.status = 'ACTIVE'
-        AND c.start_date <= $3
-        AND (c.end_date IS NULL OR c.end_date >= $3)
-      ORDER BY c.start_date DESC, c.contract_id DESC
+        AND c.start_date <= $3::date
+        AND (c.end_date IS NULL OR c.end_date >= $3::date)
+      ORDER BY 
+        (CASE 
+          WHEN c.employee_id = $2 THEN 1 
+          WHEN c.department_id = e.department_id THEN 2 
+          WHEN c.department_id IS NULL THEN 3
+          ELSE 4 
+        END),
+        c.start_date DESC, 
+        c.contract_id DESC
       LIMIT 1
     `,
     [companyId, employeeId, targetDate]

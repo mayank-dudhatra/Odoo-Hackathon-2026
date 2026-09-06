@@ -1,5 +1,5 @@
 const { AppError } = require("../utils/http");
-const { getWorkingScheduleById, getScheduleByEmployee } = require("../repositories/schedule.repository");
+const { getWorkingScheduleById, getScheduleByEmployee, listWorkingSchedules } = require("../repositories/schedule.repository");
 const { resolveEffectiveContract } = require("./contract.resolver.service");
 
 function normalizeDateStr(val) {
@@ -40,6 +40,17 @@ async function resolveEffectiveSchedule(companyId, employeeId, targetDate) {
           contract_id: contract?.contract_id || null,
         };
       }
+    }
+  }
+
+  if (!schedule) {
+    const companySchedules = await listWorkingSchedules(companyId, { is_active: true });
+    if (companySchedules && companySchedules.length > 0) {
+      schedule = companySchedules[0];
+      source = {
+        source_type: "COMPANY_DEFAULT",
+        contract_id: contract?.contract_id || null,
+      };
     }
   }
 

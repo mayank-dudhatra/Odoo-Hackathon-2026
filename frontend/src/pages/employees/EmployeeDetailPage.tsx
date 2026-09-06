@@ -71,21 +71,22 @@ export const EmployeeDetailPage: React.FC = () => {
       const data = await employeesApi.getEmployee(id);
       setEmployee(data);
 
-      const [contractData, scheduleData, policiesData, employeeContracts] = await Promise.all([
+      const [contractData, scheduleData, policiesData, employeeContracts, allSchedules] = await Promise.all([
         contractsApi.getEffectiveContract(Number(id)).catch(() => null),
         schedulesApi.getEffectiveSchedule(Number(id)).catch(() => null),
         attendanceApi.listPolicies().catch(() => []),
         contractsApi.listContracts({ employee_id: Number(id) }).catch(() => []),
+        schedulesApi.listSchedules().catch(() => []),
       ]);
 
-      // Effective contract or fallback to active contract for THIS employee
+      // Effective contract or fallback to active contract for THIS employee/company
       let finalContract = contractData;
       if (!finalContract && employeeContracts && employeeContracts.length > 0) {
         finalContract = (employeeContracts.find((c) => c.status === 'ACTIVE') || employeeContracts[0]) as any;
       }
       setEffectiveContract(finalContract);
 
-      // Effective schedule
+      // Effective schedule or fallback
       let finalSchedule = scheduleData;
       const fallbackScheduleId = finalContract?.schedule_id || (data as any)?.schedule_id;
       if (!finalSchedule && fallbackScheduleId) {
@@ -95,23 +96,29 @@ export const EmployeeDetailPage: React.FC = () => {
           // ignore
         }
       }
+      if (!finalSchedule && allSchedules && allSchedules.length > 0) {
+        finalSchedule = allSchedules.find((s) => s.is_active) || allSchedules[0] || null;
+      }
       setEffectiveSchedule(finalSchedule);
 
-      // Resolve attendance policy strictly from the employee's assigned schedule
+      // Resolve attendance policy from schedule or fallback to active company policy
       const policyId = finalSchedule?.attendance_policy_id;
+      let foundPolicy: AttendancePolicy | null = null;
       if (policyId) {
-        let found = policiesData.find((p) => p.policy_id === policyId);
-        if (!found) {
+        foundPolicy = policiesData.find((p) => p.policy_id === policyId) || null;
+        if (!foundPolicy) {
           try {
-            found = await attendanceApi.getPolicy(policyId);
+            foundPolicy = await attendanceApi.getPolicy(policyId);
           } catch {
             // ignore
           }
         }
-        setAssignedPolicy(found || null);
-      } else {
-        setAssignedPolicy(null);
       }
+
+      if (!foundPolicy && policiesData && policiesData.length > 0) {
+        foundPolicy = policiesData.find((p) => p.is_active) || policiesData[0] || null;
+      }
+      setAssignedPolicy(foundPolicy);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to load employee details';
       setError(msg);
@@ -248,6 +255,11 @@ export const EmployeeDetailPage: React.FC = () => {
                   {employee.full_name || `${employee.first_name} ${employee.last_name}`}
                 </h1>
                 {getStatusBadge(employee.status)}
+                {employee.role_name && (
+                  <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                    {employee.role_name}
+                  </span>
+                )}
               </div>
               <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-[#64748B]">
                 <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-xs text-slate-700 font-semibold">
@@ -397,6 +409,12 @@ export const EmployeeDetailPage: React.FC = () => {
             <div className="grid grid-cols-3 gap-2">
               <span className="text-[#64748B]">Account Status:</span>
               <span className="col-span-2">{getStatusBadge(employee.status)}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <span className="text-[#64748B]">System Role:</span>
+              <span className="col-span-2 font-bold text-indigo-700">
+                {employee.role_name || 'Employee'}
+              </span>
             </div>
           </div>
         </div>
