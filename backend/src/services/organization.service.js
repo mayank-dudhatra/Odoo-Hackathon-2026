@@ -812,6 +812,56 @@ async function updateEmployeeRecord(auth, employeeId, payload) {
       [employeeId, auth.company_id, (payload.email || current.email).trim()]
     );
   }
+  // Handle contract update or creation during employee profile update
+  if (payload.selected_contract_id) {
+    await query(
+      `UPDATE contracts SET status = 'EXPIRED', updated_at = NOW() WHERE company_id = $1 AND employee_id = $2 AND status = 'ACTIVE' AND contract_id != $3`,
+      [auth.company_id, employeeId, payload.selected_contract_id]
+    );
+    await query(
+      `UPDATE contracts SET employee_id = $1, status = 'ACTIVE', position_id = COALESCE($4, position_id), department_id = COALESCE($5, department_id), schedule_id = COALESCE($6, schedule_id), updated_at = NOW() WHERE company_id = $2 AND contract_id = $3`,
+      [employeeId, auth.company_id, payload.selected_contract_id, payload.position_id || null, payload.department_id || null, payload.schedule_id || null]
+    );
+  } else if (payload.wage && payload.salary_structure_id) {
+    await query(
+      `UPDATE contracts SET status = 'EXPIRED', updated_at = NOW() WHERE company_id = $1 AND employee_id = $2 AND status = 'ACTIVE'`,
+      [auth.company_id, employeeId]
+    );
+    const startDate = payload.contract_start_date ? new Date(payload.contract_start_date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+    const endDate = payload.contract_end_date ? new Date(payload.contract_end_date).toISOString().slice(0, 10) : null;
+    await query(
+      `
+        INSERT INTO contracts (
+          company_id,
+          employee_id,
+          position_id,
+          department_id,
+          schedule_id,
+          salary_structure_id,
+          wage,
+          wage_type,
+          start_date,
+          end_date,
+          status,
+          created_by
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ACTIVE', $11)
+      `,
+      [
+        auth.company_id,
+        employeeId,
+        payload.position_id || null,
+        payload.department_id || null,
+        payload.schedule_id || null,
+        payload.salary_structure_id,
+        payload.wage,
+        payload.wage_type || "MONTHLY",
+        startDate,
+        endDate,
+        auth.user_id,
+      ]
+    );
+  }
 
   const employee = await getEmployeeById(auth.company_id, employeeId);
 

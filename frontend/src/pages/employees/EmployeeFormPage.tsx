@@ -188,6 +188,22 @@ export const EmployeeFormPage: React.FC = () => {
       if (data.account_status) {
         setAccountStatus(data.account_status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE');
       }
+
+      // Pre-populate contract configuration if effective contract exists
+      try {
+        const effContract = await contractsApi.getEffectiveContract(Number(id));
+        if (effContract) {
+          setContractOption('EXISTING');
+          setSelectedContractId(String(effContract.contract_id));
+          if (effContract.salary_structure_id) setSalaryStructureId(String(effContract.salary_structure_id));
+          if (effContract.wage) setWageAmount(String(effContract.wage));
+          if (effContract.wage_type) setWageType(effContract.wage_type);
+          if (effContract.start_date) setContractStartDate(effContract.start_date.split('T')[0]);
+          if (effContract.end_date) setContractEndDate(effContract.end_date.split('T')[0]);
+        }
+      } catch {
+        // Fall back gracefully if no contract exists
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to load employee details';
       setInitialError(msg);
