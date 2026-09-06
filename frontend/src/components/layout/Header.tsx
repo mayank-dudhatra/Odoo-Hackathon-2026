@@ -134,12 +134,34 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, pageTitle = 'Peopl
                   type="button"
                   onClick={() => {
                     setDropdownOpen(false);
-                    navigate('/profile');
+                    navigate(user?.employee_id ? `/employees/${user.employee_id}` : '/profile');
                   }}
                   className="w-full px-3.5 py-2 text-left text-xs font-medium text-[#0F172A] hover:bg-[#F1F5F9] flex items-center gap-2 transition-colors cursor-pointer"
                 >
                   <User className="w-4 h-4 text-[#64748B]" />
                   <span>My Profile</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    navigate('/my-attendance');
+                  }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-[#0F172A] hover:bg-[#F1F5F9] flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <UserCheck className="w-4 h-4 text-[#64748B]" />
+                  <span>My Attendance (Check In/Out)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    navigate('/time-off');
+                  }}
+                  className="w-full px-3.5 py-2 text-left text-xs font-medium text-[#0F172A] hover:bg-[#F1F5F9] flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <KeyRound className="w-4 h-4 text-[#64748B]" />
+                  <span>Time Off & Leaves</span>
                 </button>
                 <button
                   type="button"

@@ -275,6 +275,8 @@ async function changeUserRole({ actor, userId, roleName }) {
 async function relinkUserEmployee({ actor, userId, employeeId }) {
   await ensureEmployeeBelongsToCompany(actor.company_id, employeeId);
 
+  await query(`UPDATE employees SET user_id = NULL, updated_at = NOW() WHERE user_id = $1 AND company_id = $2`, [userId, actor.company_id]);
+
   const result = await query(
     `
       UPDATE users
@@ -288,6 +290,10 @@ async function relinkUserEmployee({ actor, userId, employeeId }) {
 
   if (!result.rows[0]) {
     throw new AppError(404, "User not found", "USER_NOT_FOUND");
+  }
+
+  if (employeeId) {
+    await query(`UPDATE employees SET user_id = $1, updated_at = NOW() WHERE employee_id = $2 AND company_id = $3`, [userId, employeeId, actor.company_id]);
   }
 
   await createAuditLog({

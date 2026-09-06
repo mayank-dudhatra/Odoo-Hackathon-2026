@@ -17,6 +17,8 @@ import {
   ArrowRight,
 } from 'lucide-react';
 
+import { EmployeeProfileRoleCard } from '../../components/common/EmployeeProfileRoleCard';
+
 export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [userSummary, setUserSummary] = useState<UserSummary>({
@@ -66,6 +68,9 @@ export const AdminDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-6xl pb-12">
+      {/* Top Banner: Employee Profile + Role Governance */}
+      <EmployeeProfileRoleCard />
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

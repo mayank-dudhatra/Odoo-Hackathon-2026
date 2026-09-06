@@ -247,18 +247,14 @@ async function createLeaveRequestService({ actor, payload }) {
   let targetEmployeeId = actor.employee_id;
 
   if (!targetEmployeeId) {
-    const matchEmp = await query(
-      `SELECT employee_id FROM employees WHERE company_id = $1 AND (LOWER(email) = LOWER($2) OR created_by = $3) ORDER BY employee_id ASC LIMIT 1`,
-      [companyId, actor.email || '', actor.user_id]
+    const empResult = await query(
+      `SELECT employee_id FROM employees WHERE company_id = $1 AND (user_id = $2 OR LOWER(email) = (SELECT LOWER(email) FROM users WHERE user_id = $2)) ORDER BY (CASE WHEN user_id = $2 THEN 1 ELSE 2 END) ASC LIMIT 1`,
+      [companyId, actor.user_id]
     );
-    if (matchEmp.rows[0]) {
-      targetEmployeeId = matchEmp.rows[0].employee_id;
-      await query(`UPDATE users SET employee_id = $1 WHERE user_id = $2 AND employee_id IS NULL`, [targetEmployeeId, actor.user_id]);
-    } else {
-      const anyEmp = await query(`SELECT employee_id FROM employees WHERE company_id = $1 ORDER BY employee_id ASC LIMIT 1`, [companyId]);
-      if (anyEmp.rows[0]) {
-        targetEmployeeId = anyEmp.rows[0].employee_id;
-      }
+    if (empResult.rows[0]) {
+      targetEmployeeId = empResult.rows[0].employee_id;
+      await query(`UPDATE users SET employee_id = $1, updated_at = NOW() WHERE user_id = $2 AND employee_id IS NULL`, [targetEmployeeId, actor.user_id]);
+      await query(`UPDATE employees SET user_id = $1, updated_at = NOW() WHERE employee_id = $2 AND user_id IS NULL`, [actor.user_id, targetEmployeeId]);
     }
   }
 

@@ -31,7 +31,7 @@ async function createAllocation(executor = defaultQuery, {
         approved_by,
         approved_at
       )
-      VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9, CASE WHEN $8 = 'APPROVED' THEN NOW() ELSE NULL END)
+      VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8::varchar, $9, CASE WHEN $8::varchar = 'APPROVED' THEN NOW() ELSE NULL END)
       RETURNING *
     `,
     [

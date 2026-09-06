@@ -4,6 +4,7 @@ import { EmployeeDashboard } from './EmployeeDashboard';
 import { HrManagerDashboard } from './HrManagerDashboard';
 import { PayrollUserDashboard } from './PayrollUserDashboard';
 import { PayrollManagerDashboard } from './PayrollManagerDashboard';
+import { ManagerDashboard } from './ManagerDashboard';
 import { AdminDashboard } from './AdminDashboard';
 
 export const DashboardPage: React.FC = () => {
@@ -18,6 +19,8 @@ export const DashboardPage: React.FC = () => {
       return <PayrollUserDashboard />;
     case 'Payroll Manager':
       return <PayrollManagerDashboard />;
+    case 'Manager':
+      return <ManagerDashboard />;
     case 'Admin':
       return <AdminDashboard />;
     default:

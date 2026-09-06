@@ -124,7 +124,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     setLoading(true);
     try {
       const payload: CreateContractPayload = {
-        employee_id: employeeId ? Number(employeeId) : null,
+        employee_id: defaultEmployeeId ? Number(defaultEmployeeId) : (contract?.employee_id ? Number(contract.employee_id) : null),
         department_id: departmentId ? Number(departmentId) : null,
         position_id: positionId ? Number(positionId) : null,
         schedule_id: scheduleId ? Number(scheduleId) : null,
@@ -180,25 +180,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
           </div>
         )}
 
-        {/* Employee */}
-        <div>
-          <label className="block text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-1">
-            Employee (Optional / Assign Later)
-          </label>
-          <select
-            disabled={Boolean(defaultEmployeeId)}
-            value={employeeId}
-            onChange={(e) => setEmployeeId(e.target.value)}
-            className="w-full px-3 py-2 text-sm bg-white border border-[#E2E8F0] rounded-md text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#2563EB] disabled:bg-[#F1F5F9]"
-          >
-            <option value="">Unassigned / Select Employee Later...</option>
-            {employees.map((emp) => (
-              <option key={emp.employee_id} value={emp.employee_id}>
-                {emp.first_name} {emp.last_name} ({emp.employee_code})
-              </option>
-            ))}
-          </select>
-        </div>
+
 
         {/* Department & Position */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -26,6 +26,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   });
 
+  const [employee, setEmployee] = useState<EmployeeInfo | null>(() => {
+    const savedEmp = localStorage.getItem('pp360_employee');
+    if (savedEmp) {
+      try {
+        return JSON.parse(savedEmp) as EmployeeInfo;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
   const [permissions, setPermissions] = useState<RolePermission[]>(() => {
     const saved = localStorage.getItem(PERMISSIONS_STORAGE_KEY);
     if (saved) {
@@ -59,6 +71,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(meResponse.user);
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(meResponse.user));
 
+        if (meResponse.employee) {
+          setEmployee(meResponse.employee);
+          localStorage.setItem('pp360_employee', JSON.stringify(meResponse.employee));
+        } else {
+          setEmployee(null);
+          localStorage.removeItem('pp360_employee');
+        }
+
         let perms = meResponse.permissions || [];
         if ((!perms || perms.length === 0) && meResponse.user.role_id) {
           perms = await fetchRolePermissions(meResponse.user.role_id);
@@ -68,21 +88,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem(PERMISSIONS_STORAGE_KEY, JSON.stringify(perms));
       }
     } catch {
-      // If getMe fails on refresh and tokens are invalid, clear
       if (!getStoredAccessToken()) {
         setUser(null);
+        setEmployee(null);
         setPermissions([]);
         clearStoredTokens();
       }
     }
   }, [fetchRolePermissions]);
 
-  // Initial load to rehydrate and verify authentication
   useEffect(() => {
     const initAuth = async () => {
       const token = getStoredAccessToken();
       if (!token) {
         setUser(null);
+        setEmployee(null);
         setPermissions([]);
         setIsLoading(false);
         return;
@@ -91,9 +111,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         await refreshUser();
       } catch {
-        // Token might be expired or invalid
         clearStoredTokens();
         setUser(null);
+        setEmployee(null);
         setPermissions([]);
       } finally {
         setIsLoading(false);
@@ -105,8 +125,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const handleUnauthorized = () => {
       clearStoredTokens();
       localStorage.removeItem(USER_STORAGE_KEY);
+      localStorage.removeItem('pp360_employee');
       localStorage.removeItem(PERMISSIONS_STORAGE_KEY);
       setUser(null);
+      setEmployee(null);
       setPermissions([]);
     };
 
@@ -128,23 +150,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [refreshUser]);
 
   const login = async (credentials: LoginCredentials): Promise<User> => {
-    // Clear any previous session state before storing new user session
     clearStoredTokens();
     localStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem('pp360_employee');
     localStorage.removeItem(PERMISSIONS_STORAGE_KEY);
     setUser(null);
+    setEmployee(null);
     setPermissions([]);
 
     setIsLoading(true);
     try {
       const response = await authApi.login(credentials);
-      const { access_token, refresh_token, user: loggedInUser } = response;
+      const { access_token, refresh_token, user: loggedInUser, employee: loggedInEmployee } = response;
 
       setStoredTokens(access_token, refresh_token);
       setUser(loggedInUser);
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(loggedInUser));
 
-      // Resolve permissions
+      if (loggedInEmployee) {
+        setEmployee(loggedInEmployee);
+        localStorage.setItem('pp360_employee', JSON.stringify(loggedInEmployee));
+      } else {
+        setEmployee(null);
+      }
+
       let perms = response.permissions || [];
       if ((!perms || perms.length === 0) && loggedInUser.role_id) {
         perms = await fetchRolePermissions(loggedInUser.role_id);
@@ -165,8 +194,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       clearStoredTokens();
       localStorage.removeItem(USER_STORAGE_KEY);
+      localStorage.removeItem('pp360_employee');
       localStorage.removeItem(PERMISSIONS_STORAGE_KEY);
       setUser(null);
+      setEmployee(null);
       setPermissions([]);
     }
   };
@@ -215,6 +246,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         user,
+        employee,
         role,
         permissions,
         isAuthenticated,

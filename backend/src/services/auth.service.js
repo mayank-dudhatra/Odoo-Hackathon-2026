@@ -273,15 +273,17 @@ async function login({ identifier, password, ipAddress, userAgent }) {
     details: { session_id: sessionResult.rows[0].session_id },
   });
 
-  const permissions = await getRolePermissions(user.role_id);
+  const fullProfile = await getCurrentUserProfile(user.user_id, user.company_id);
 
   return {
     access_token: accessToken,
     refresh_token: refreshToken,
     refresh_expires_at: sessionResult.rows[0].expires_at,
     must_change_password: Boolean(user.must_change_password),
-    user: buildPublicUser(user),
-    permissions,
+    user: fullProfile?.user || buildPublicUser(user),
+    employee: fullProfile?.employee || null,
+    company: fullProfile?.company || null,
+    permissions: fullProfile?.permissions || [],
   };
 }
 
@@ -625,6 +627,10 @@ async function createInvitationForUser({ actor, payload }) {
 
   const newUser = result.rows[0];
 
+  if (assignedEmployeeId) {
+    await query(`UPDATE employees SET user_id = $1, updated_at = NOW() WHERE employee_id = $2 AND company_id = $3`, [newUser.user_id, assignedEmployeeId, actor.company_id]);
+  }
+
   const companyResult = await query(
     `SELECT name FROM companies WHERE company_id = $1 LIMIT 1`,
     [actor.company_id]
@@ -793,12 +799,31 @@ async function getCurrentUserProfile(userId, companyId) {
         u.last_login_at,
         u.created_at,
         u.updated_at,
+        c.name AS company_name,
+        e.employee_id AS emp_id,
+        e.employee_code,
         e.first_name,
         e.last_name,
-        e.employee_code
+        e.email AS employee_email,
+        e.phone AS employee_phone,
+        e.hire_date,
+        e.status AS employee_status,
+        e.department_id,
+        d.name AS department_name,
+        e.position_id,
+        p.title AS position_name,
+        e.employee_type_id,
+        et.name AS employee_type_name,
+        e.manager_id,
+        CONCAT(m.first_name, ' ', m.last_name) AS manager_name
       FROM users u
       JOIN roles r ON r.role_id = u.role_id
-      LEFT JOIN employees e ON e.employee_id = u.employee_id
+      LEFT JOIN companies c ON c.company_id = u.company_id
+      LEFT JOIN employees e ON e.user_id = u.user_id OR e.employee_id = u.employee_id
+      LEFT JOIN departments d ON d.department_id = e.department_id
+      LEFT JOIN positions p ON p.position_id = e.position_id
+      LEFT JOIN employee_types et ON et.employee_type_id = e.employee_type_id
+      LEFT JOIN employees m ON m.employee_id = e.manager_id
       WHERE u.user_id = $1 AND u.company_id = $2
       LIMIT 1
     `,
@@ -808,25 +833,48 @@ async function getCurrentUserProfile(userId, companyId) {
   let row = result.rows[0] || null;
   if (row && !row.employee_id && row.email) {
     const empMatch = await query(
-      `SELECT employee_id, first_name, last_name, employee_code FROM employees WHERE company_id = $1 AND LOWER(email) = LOWER($2) LIMIT 1`,
+      `SELECT employee_id FROM employees WHERE company_id = $1 AND LOWER(email) = LOWER($2) LIMIT 1`,
       [companyId, row.email.trim()]
     );
     if (empMatch.rows[0]) {
-      const emp = empMatch.rows[0];
-      await query(`UPDATE users SET employee_id = $1, updated_at = NOW() WHERE user_id = $2 AND employee_id IS NULL`, [emp.employee_id, userId]);
-      row.employee_id = emp.employee_id;
-      row.first_name = emp.first_name;
-      row.last_name = emp.last_name;
-      row.employee_code = emp.employee_code;
+      const empId = empMatch.rows[0].employee_id;
+      await query(`UPDATE users SET employee_id = $1, updated_at = NOW() WHERE user_id = $2 AND employee_id IS NULL`, [empId, userId]);
+      await query(`UPDATE employees SET user_id = $1, updated_at = NOW() WHERE employee_id = $2 AND user_id IS NULL`, [userId, empId]);
+      row.employee_id = empId;
     }
   }
 
   const user = buildPublicUser(row);
   if (!user) return null;
 
+  const employee = row && (row.employee_id || row.emp_id) ? {
+    employee_id: row.emp_id || row.employee_id,
+    employee_code: row.employee_code || null,
+    first_name: row.first_name || null,
+    last_name: row.last_name || null,
+    full_name: row.first_name ? `${row.first_name} ${row.last_name || ''}`.trim() : null,
+    email: row.employee_email || row.email,
+    phone: row.employee_phone || null,
+    hire_date: row.hire_date || null,
+    status: row.employee_status || null,
+    department_id: row.department_id || null,
+    department_name: row.department_name || null,
+    position_id: row.position_id || null,
+    position_name: row.position_name || null,
+    employee_type_id: row.employee_type_id || null,
+    employee_type_name: row.employee_type_name || null,
+    manager_id: row.manager_id || null,
+    manager_name: row.manager_name || null,
+  } : null;
+
   const permissions = await getRolePermissions(user.role_id);
   return {
     user,
+    employee,
+    company: {
+      company_id: row.company_id,
+      name: row.company_name,
+    },
     permissions,
   };
 }

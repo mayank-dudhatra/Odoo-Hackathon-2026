@@ -1,8 +1,9 @@
 import { createContext } from 'react';
-import type { User, LoginCredentials, RolePermission } from '../types/auth';
+import type { User, EmployeeInfo, LoginCredentials, RolePermission } from '../types/auth';
 
 export interface AuthContextType {
   user: User | null;
+  employee: EmployeeInfo | null;
   role: string | null;
   permissions: RolePermission[];
   isAuthenticated: boolean;

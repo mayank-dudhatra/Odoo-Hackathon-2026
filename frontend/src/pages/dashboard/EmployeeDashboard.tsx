@@ -10,6 +10,7 @@ import type { Payslip } from '../../types/payroll';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
 import { ErrorAlert } from '../../components/common/States';
+import { EmployeeProfileRoleCard } from '../../components/common/EmployeeProfileRoleCard';
 import { formatCurrency, formatDate } from '../../utils/format';
 import {
   Clock,
@@ -119,12 +120,6 @@ export const EmployeeDashboard: React.FC = () => {
     );
   }
 
-  const employeeName =
-    user?.employee_name ||
-    `${user?.first_name || ''} ${user?.last_name || ''}`.trim() ||
-    user?.username ||
-    'Employee';
-
   const isCheckedIn = Boolean(todayAttendance && todayAttendance.check_in);
   const isCheckedOut = Boolean(todayAttendance && todayAttendance.check_out);
 
@@ -144,6 +139,8 @@ export const EmployeeDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-6xl pb-12">
+      {/* 0. EMPLOYEE PROFILE & ROLE GOVERNANCE BANNER */}
+      <EmployeeProfileRoleCard />
       {/* Toast Alert */}
       {successMsg && (
         <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium rounded-xl flex items-center gap-2">

@@ -49,8 +49,7 @@ async function resolvePolicyForSchedule(companyId, effectiveSchedule, client = n
 }
 
 async function processCheckIn(auth, payload) {
-  const isEmployeeRole = auth.role_name === "Employee";
-  const employeeId = isEmployeeRole ? auth.employee_id : (payload.employee_id || auth.employee_id);
+  let employeeId = payload.employee_id || (await resolveOrProvisionEmployeeId(auth));
   if (!employeeId) {
     throw new AppError(400, "Employee ID is required for check-in", "MISSING_EMPLOYEE_ID");
   }
@@ -170,8 +169,7 @@ async function processCheckIn(auth, payload) {
 }
 
 async function processCheckOut(auth, payload) {
-  const isEmployeeRole = auth.role_name === "Employee";
-  const employeeId = isEmployeeRole ? auth.employee_id : (payload.employee_id || auth.employee_id);
+  let employeeId = payload.employee_id || (await resolveOrProvisionEmployeeId(auth));
   if (!employeeId) {
     throw new AppError(400, "Employee ID is required for check-out", "MISSING_EMPLOYEE_ID");
   }
@@ -376,21 +374,58 @@ async function correctAttendanceRecord(auth, attendanceId, payload) {
   });
 }
 
+async function resolveOrProvisionEmployeeId(auth) {
+  if (auth.employee_id) {
+    return auth.employee_id;
+  }
+  const empRes = await query(
+    `SELECT employee_id FROM employees WHERE company_id = $1 AND (user_id = $2 OR LOWER(email) = (SELECT LOWER(email) FROM users WHERE user_id = $2)) ORDER BY (CASE WHEN user_id = $2 THEN 1 ELSE 2 END) ASC LIMIT 1`,
+    [auth.company_id, auth.user_id]
+  );
+  if (empRes.rows[0]) {
+    auth.employee_id = empRes.rows[0].employee_id;
+    return auth.employee_id;
+  }
+  const uRes = await query(`SELECT username, email FROM users WHERE user_id = $1`, [auth.user_id]);
+  const uData = uRes.rows[0];
+  if (uData) {
+    const rawName = uData.username || uData.email.split('@')[0];
+    const nameParts = rawName.trim().split(/[\s._-]+/);
+    const firstName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1) : 'Staff';
+    const lastName = nameParts.slice(1).join(' ') ? nameParts.slice(1).join(' ') : 'User';
+    const empCode = `EMP-U${auth.user_id}`;
+    const newEmpRes = await query(
+      `INSERT INTO employees (company_id, user_id, employee_code, first_name, last_name, email, status, hire_date)
+       VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE', CURRENT_DATE)
+       RETURNING employee_id`,
+      [auth.company_id, auth.user_id, empCode, firstName, lastName, uData.email]
+    );
+    if (newEmpRes.rows[0]) {
+      auth.employee_id = newEmpRes.rows[0].employee_id;
+      await query(`UPDATE users SET employee_id = $1 WHERE user_id = $2`, [auth.employee_id, auth.user_id]);
+      return auth.employee_id;
+    }
+  }
+  return null;
+}
+
 async function getEmployeeOwnAttendance(auth, filters) {
-  if (!auth.employee_id) {
+  const employeeId = await resolveOrProvisionEmployeeId(auth);
+  if (!employeeId) {
     throw new AppError(400, "User is not linked to an employee record", "NO_LINKED_EMPLOYEE");
   }
   return listAttendanceRecords(auth.company_id, {
     ...filters,
-    employee_id: auth.employee_id,
+    employee_id: employeeId,
   });
 }
 
 async function getEmployeeOwnAttendanceByDate(auth, dateStr) {
-  if (!auth.employee_id) {
+  const employeeId = await resolveOrProvisionEmployeeId(auth);
+  if (!employeeId) {
     throw new AppError(400, "User is not linked to an employee record", "NO_LINKED_EMPLOYEE");
   }
-  const record = await getAttendanceByEmployeeAndDate(auth.company_id, auth.employee_id, dateStr);
+  const record = await getAttendanceByEmployeeAndDate(auth.company_id, employeeId, dateStr);
   if (!record) {
     throw new AppError(404, `No attendance record found for date ${dateStr}`, "ATTENDANCE_NOT_FOUND");
   }

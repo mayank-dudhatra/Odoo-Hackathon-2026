@@ -162,6 +162,7 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_hash TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMP;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS user_id INT UNIQUE REFERENCES users(user_id) ON DELETE SET NULL;
 
 
 CREATE TABLE IF NOT EXISTS user_sessions (
@@ -228,6 +229,7 @@ CREATE TABLE IF NOT EXISTS salary_structure_rules (
 CREATE TABLE IF NOT EXISTS employees (
   employee_id SERIAL PRIMARY KEY,
   company_id INT NOT NULL,
+  user_id INT UNIQUE,
   employee_code VARCHAR(20) NOT NULL,
   first_name VARCHAR(50) NOT NULL,
   last_name VARCHAR(50) NOT NULL,
@@ -247,6 +249,7 @@ CREATE TABLE IF NOT EXISTS employees (
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
   CONSTRAINT fk_employees_company FOREIGN KEY (company_id) REFERENCES companies(company_id) ON DELETE CASCADE,
+  CONSTRAINT fk_employees_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL,
   CONSTRAINT fk_employees_department FOREIGN KEY (department_id) REFERENCES departments(department_id) ON DELETE SET NULL,
   CONSTRAINT fk_employees_position FOREIGN KEY (position_id) REFERENCES positions(position_id) ON DELETE SET NULL,
   CONSTRAINT fk_employees_employee_type FOREIGN KEY (employee_type_id) REFERENCES employee_types(employee_type_id) ON DELETE SET NULL,
@@ -399,9 +402,11 @@ RETURNS TRIGGER AS $$
 DECLARE
   related_company_id INT;
 BEGIN
-  SELECT company_id INTO related_company_id FROM employees WHERE employee_id = NEW.employee_id;
-  IF related_company_id IS NULL OR related_company_id <> NEW.company_id THEN
-    RAISE EXCEPTION 'Contract employee must belong to the same company';
+  IF NEW.employee_id IS NOT NULL THEN
+    SELECT company_id INTO related_company_id FROM employees WHERE employee_id = NEW.employee_id;
+    IF related_company_id IS NULL OR related_company_id <> NEW.company_id THEN
+      RAISE EXCEPTION 'Contract employee must belong to the same company';
+    END IF;
   END IF;
 
   IF NEW.position_id IS NOT NULL THEN

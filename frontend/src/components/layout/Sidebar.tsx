@@ -58,7 +58,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       name: 'My Profile',
       path: user?.employee_id ? `/employees/${user.employee_id}` : '/employees',
       icon: <UserCheck className="w-[18px] h-[18px]" />,
-      visible: isEmployee || (hasEmployeeProfile && !isAdmin && !isHR),
+      visible: hasEmployeeProfile || isEmployee,
     },
     {
       name: 'Departments',

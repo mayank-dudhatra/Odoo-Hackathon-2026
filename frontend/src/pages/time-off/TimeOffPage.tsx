@@ -53,10 +53,17 @@ export const TimeOffPage: React.FC = () => {
     setRequestsError(null);
     try {
       const isEmployeeOnly = user?.role_name === 'Employee';
-      const data = isEmployeeOnly
-        ? await leaveApi.getOwnLeaveRequests()
-        : await leaveApi.listLeaveRequests();
-      setRequests(data);
+      let data: LeaveRequest[];
+      if (isEmployeeOnly) {
+        data = await leaveApi.getOwnLeaveRequests();
+      } else {
+        try {
+          data = await leaveApi.listLeaveRequests();
+        } catch {
+          data = await leaveApi.getOwnLeaveRequests();
+        }
+      }
+      setRequests(data || []);
     } catch (err: any) {
       setRequestsError(err?.response?.data?.message || err.message || 'Failed to fetch leave requests');
     } finally {

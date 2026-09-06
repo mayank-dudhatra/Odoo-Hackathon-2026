@@ -470,13 +470,18 @@ async function createEmployeeRecord(auth, payload) {
       );
 
       if (existingUser.rows[0]) {
+        const targetUserId = existingUser.rows[0].user_id;
         if (!existingUser.rows[0].employee_id) {
           await query(
             `UPDATE users SET employee_id = $1, updated_at = NOW() WHERE user_id = $2 AND employee_id IS NULL`,
-            [employeeId, existingUser.rows[0].user_id]
+            [employeeId, targetUserId]
           );
-          console.log(`[OrganizationService] Linked existing user (ID: ${existingUser.rows[0].user_id}) to employee ID ${employeeId}`);
         }
+        await query(
+          `UPDATE employees SET user_id = $1, updated_at = NOW() WHERE employee_id = $2`,
+          [targetUserId, employeeId]
+        );
+        console.log(`[OrganizationService] Linked existing user (ID: ${targetUserId}) to employee ID ${employeeId}`);
       } else {
         const cleanFirst = (employee.first_name || "emp").toLowerCase().replace(/[^a-z0-9]/g, "");
         const cleanLast = (employee.last_name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -528,6 +533,11 @@ async function createEmployeeRecord(auth, payload) {
         );
 
         const newUser = userInsert.rows[0];
+
+        await query(
+          `UPDATE employees SET user_id = $1, updated_at = NOW() WHERE employee_id = $2`,
+          [newUser.user_id, employeeId]
+        );
 
         const companyResult = await query(
           `SELECT name FROM companies WHERE company_id = $1 LIMIT 1`,

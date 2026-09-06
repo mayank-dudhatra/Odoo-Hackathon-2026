@@ -45,15 +45,49 @@ async function authenticate(req, res, next) {
       throw new AppError(401, "Invalid authentication", "INVALID_AUTH");
     }
 
-    if (!user.employee_id) {
-      const empResult = await query(
-        `SELECT employee_id FROM employees WHERE company_id = $1 AND LOWER(email) = (SELECT LOWER(email) FROM users WHERE user_id = $2) LIMIT 1`,
-        [user.company_id, user.user_id]
-      );
-      if (empResult.rows[0]) {
-        user.employee_id = empResult.rows[0].employee_id;
-        await query(`UPDATE users SET employee_id = $1, updated_at = NOW() WHERE user_id = $2 AND employee_id IS NULL`, [user.employee_id, user.user_id]);
+    // Resolve employee_id for authenticated user (users.id -> employees.user_id -> employees.id)
+    const empResult = await query(
+      `SELECT employee_id FROM employees WHERE company_id = $1 AND (user_id = $2 OR employee_id = $3 OR LOWER(email) = (SELECT LOWER(email) FROM users WHERE user_id = $2)) ORDER BY (CASE WHEN user_id = $2 THEN 1 WHEN employee_id = $3 THEN 2 ELSE 3 END) ASC LIMIT 1`,
+      [user.company_id, user.user_id, user.employee_id || -1]
+    );
+
+    let resolvedEmpId = empResult.rows[0]?.employee_id;
+
+    if (!resolvedEmpId) {
+      // Auto-provision an employee record for this user if missing
+      const uRes = await query(`SELECT username, email FROM users WHERE user_id = $1`, [user.user_id]);
+      const uData = uRes.rows[0];
+      if (uData) {
+        const rawName = uData.username || uData.email.split('@')[0];
+        const nameParts = rawName.trim().split(/[\s._-]+/);
+        const firstName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1) : 'Staff';
+        const lastName = nameParts.slice(1).join(' ') ? nameParts.slice(1).join(' ') : 'User';
+        const empCode = `EMP-U${user.user_id}`;
+
+        const newEmpRes = await query(
+          `INSERT INTO employees (company_id, user_id, employee_code, first_name, last_name, email, status, hire_date)
+           VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE', CURRENT_DATE)
+           RETURNING employee_id`,
+          [user.company_id, user.user_id, empCode, firstName, lastName, uData.email]
+        );
+        if (newEmpRes.rows[0]) {
+          resolvedEmpId = newEmpRes.rows[0].employee_id;
+        }
       }
+    }
+
+    if (resolvedEmpId) {
+      user.employee_id = resolvedEmpId;
+
+      // Synchronize bidirectional link
+      await query(
+        `UPDATE employees SET user_id = $1, updated_at = NOW() WHERE employee_id = $2 AND (user_id IS NULL OR user_id = $1)`,
+        [user.user_id, resolvedEmpId]
+      );
+      await query(
+        `UPDATE users SET employee_id = $1, updated_at = NOW() WHERE user_id = $2 AND (employee_id IS NULL OR employee_id = $1)`,
+        [resolvedEmpId, user.user_id]
+      );
     }
 
     if (user.status !== "ACTIVE") {
