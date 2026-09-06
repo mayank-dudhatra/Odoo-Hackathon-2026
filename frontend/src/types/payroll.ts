@@ -36,6 +36,7 @@ export interface PayrunEmployee {
   net_pay?: number;
   warnings?: string[];
   errors?: string[];
+  error_message?: string | null;
   status?: string;
 }
 

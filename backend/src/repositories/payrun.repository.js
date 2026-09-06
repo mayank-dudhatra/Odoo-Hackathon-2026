@@ -12,10 +12,17 @@ function parseArgs(first, second, ...rest) {
 
 async function createPayrun(executorOrData, dataIfExecutor) {
   let db = defaultQuery;
-  let payload = executorOrData;
+  let payload;
+
   if (executorOrData && typeof executorOrData.query === "function") {
     db = executorOrData;
     payload = dataIfExecutor;
+  } else {
+    payload = executorOrData ?? dataIfExecutor;
+  }
+
+  if (!payload || typeof payload !== "object") {
+    throw new Error("Payrun payload is required");
   }
 
   const {

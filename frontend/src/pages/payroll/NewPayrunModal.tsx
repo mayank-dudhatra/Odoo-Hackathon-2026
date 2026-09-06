@@ -14,6 +14,11 @@ interface NewPayrunModalProps {
   onSuccess: () => void;
 }
 
+const toLocalDateInputValue = (date: Date) => {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
 export const NewPayrunModal: React.FC<NewPayrunModalProps> = ({
   isOpen,
   onClose,
@@ -39,15 +44,15 @@ export const NewPayrunModal: React.FC<NewPayrunModalProps> = ({
         if (active) setStructures(data);
       }).catch(() => {});
 
-      // Default to current month
+      // Default to current month using local calendar dates to avoid UTC date drift
       const now = new Date();
-      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       const monthName = now.toLocaleString('default', { month: 'long', year: 'numeric' });
 
       setName(`Payrun - ${monthName}`);
-      setPeriodStart(firstDay);
-      setPeriodEnd(lastDay);
+      setPeriodStart(toLocalDateInputValue(firstDay));
+      setPeriodEnd(toLocalDateInputValue(lastDay));
       setStep(1);
       setError(null);
     }

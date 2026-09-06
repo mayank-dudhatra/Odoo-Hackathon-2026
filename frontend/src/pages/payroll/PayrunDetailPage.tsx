@@ -187,6 +187,12 @@ export const PayrunDetailPage: React.FC = () => {
   const errors = employees.filter((e) => e.status === 'ERROR' || (e.errors && e.errors.length > 0));
   const hasPayslips = payslips.length > 0;
 
+  const getEmployeeErrorText = (employee: PayrunEmployee) => {
+    const explicitErrors = Array.isArray(employee.errors) ? employee.errors.filter(Boolean) : [];
+    const primaryMessage = employee.error_message || (explicitErrors.length ? explicitErrors.join(', ') : null);
+    return primaryMessage || 'Missing contract or salary structure';
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -337,7 +343,7 @@ export const PayrunDetailPage: React.FC = () => {
           <ul className="text-xs text-amber-800 space-y-1 list-disc pl-5">
             {errors.map((errEmp) => (
               <li key={errEmp.payrun_employee_id || errEmp.employee_id}>
-                <span className="font-semibold">{errEmp.employee_name || `Employee #${errEmp.employee_id}`}</span>: {errEmp.status} - {errEmp.errors?.join(', ') || 'Missing contract or salary structure'}
+                <span className="font-semibold">{errEmp.employee_name || `Employee #${errEmp.employee_id}`}</span>: {errEmp.status} - {getEmployeeErrorText(errEmp)}
               </li>
             ))}
           </ul>
